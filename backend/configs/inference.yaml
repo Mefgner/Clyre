@@ -1,0 +1,20 @@
+runtime:
+  llama:
+    flash_attn: true
+
+    4gb:
+      context: 4096
+      batch_size: 1024
+      u_batch_size: 512
+    6gb:
+      context: 6144
+      batch_size: 1536
+      u_batch_size: 512
+    8gb:
+      context: 16384
+      batch_size: 2048
+      u_batch_size: 1024
+    12gb:
+      context: 32768
+      batchsize: 3072
+      u_batch_size: 1024
