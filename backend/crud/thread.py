@@ -23,7 +23,7 @@ async def star_thread(session: AsyncSession, thread: Thread, star: bool) -> Thre
     return thread
 
 
-async def thread_to_project_conection(session: AsyncSession, thread: Thread, project_id: int | None) -> Thread:
+async def thread_to_project_connection(session: AsyncSession, thread: Thread, project_id: int | None) -> Thread:
     thread.project_id = project_id
     thread.in_project = 1 if project_id >= 0 else 0
     session.add(thread)

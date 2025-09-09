@@ -23,6 +23,6 @@ def version():
 
 @router.post("/chat-response")
 async def chat_response(request: UserChatRequest):
-    message, thread = await chatting_sc.send_message(request.user_id, request.message)
-    response = await chatting_sc.generate_llm_response(message.id, thread.id)
-    return {"response": response.inline_value}
+    message_id, thread_id = await chatting_sc.send_message(request.user_id, request.message, request.thread_id)
+    response = await chatting_sc.generate_llm_response(thread_id, request.user_id, request.model)
+    return {"response": response.inline_value, "thread_id": thread_id, "message_id": message_id}

@@ -20,7 +20,8 @@ class LlamaLLMPipeline:
     __process: Popen | None = None
     current_model: str | None = None
 
-    def __init__(self, model_name: str, model_path: str | Path, executable_path: os.PathLike, is_in_docker: bool = False):
+    def __init__(self, model_name: str, model_path: str | Path, executable_path: os.PathLike,
+                 is_in_docker: bool = False):
         self.current_model = self.__model_name = model_name
         self.__model_path = model_path
         self.__executable_path = executable_path
@@ -31,7 +32,8 @@ class LlamaLLMPipeline:
     def _startup(self):
         if not self.__is_in_docker:
             self.__process = subprocess.Popen([
-                self.__executable_path, '--model', self.__model_path, '--host', LLAMA_WIN_HOST, '--port', LLAMA_WIN_PORT
+                self.__executable_path, '--model', self.__model_path, '--host', LLAMA_WIN_HOST, '--port', LLAMA_WIN_PORT,
+                '-ngl', '100'
             ])
             with httpx.Client(timeout=10) as client:
                 while True:
@@ -42,32 +44,31 @@ class LlamaLLMPipeline:
                         time.sleep(1.5)
         self.is_running = True
 
-    async def warmup(self):
-        await self.chat_completion_sync("hello", max_tokens=1)
-
-    def _build_payload(self, prompt: str, max_tokens: int, temperature: float, stream: bool):
+    def _build_payload(self, history: list[dict[str, str]], max_tokens: int, temperature: float, stream: bool):
         return {
             "model": self.__model_name,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": history,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": stream
         }
 
-    async def chat_completion_stream(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7):
-        payload = self._build_payload(prompt, max_tokens, temperature, stream=True)
+    async def chat_completion_stream(self, history: list[dict[str, str]], max_tokens: int = 512,
+                                     temperature: float = 0.7):
+        payload = self._build_payload(history, max_tokens, temperature, stream=True)
         link = f"{LLAMA_URL}/v1/chat/completions"
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=100.0) as client:
             async with client.stream("POST", link, json=payload) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     if line:
                         yield line
 
-    async def chat_completion_sync(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7):
-        payload = self._build_payload(prompt, max_tokens, temperature, stream=False)
+    async def chat_completion_sync(self, history: list[dict[str, str]], max_tokens: int = 512,
+                                   temperature: float = 0.7):
+        payload = self._build_payload(history, max_tokens, temperature, stream=False)
         link = f"{LLAMA_URL}/v1/chat/completions"
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=100.0) as client:
             response = await client.post(link, json=payload)
             response.raise_for_status()
             return response.json()
@@ -85,10 +86,12 @@ def get_llama_pipeline(model_name: str | None = None, executable_path: Path | No
     global llama_instance
 
     if not llama_instance:
-        llama_instance = LlamaLLMPipeline(model_name, cfg.resolve_llama_model_path(model_name), executable_path, is_in_docker)
+        llama_instance = LlamaLLMPipeline(model_name, cfg.resolve_llama_model_path(model_name), executable_path,
+                                          is_in_docker)
 
     if llama_instance.current_model != model_name:
         del llama_instance
-        llama_instance = LlamaLLMPipeline(model_name, cfg.resolve_llama_model_path(model_name), executable_path, is_in_docker)
+        llama_instance = LlamaLLMPipeline(model_name, cfg.resolve_llama_model_path(model_name), executable_path,
+                                          is_in_docker)
 
     return llama_instance

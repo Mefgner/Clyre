@@ -14,6 +14,6 @@ if __name__ == '__main__':
 
     sm = SessionManager()
     app.add_event_handler('startup', sm.init_models)
-    app.add_event_handler('startup', llama.get_llama_pipeline().warmup)
+    app.add_event_handler('startup', llama.get_llama_pipeline)
 
     uvicorn.run(app, host=HOST, port=int(PORT))

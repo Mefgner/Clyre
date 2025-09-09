@@ -15,16 +15,21 @@ async def create_message(session: AsyncSession, user_id: int, thread_id: int, ro
     return new_message
 
 
-async def get_last_message_in_thread(session: AsyncSession, thread: Thread) -> Message | None:
+async def get_last_message_in_thread(session: AsyncSession, thread_id: int) -> Message | None:
     last_one = await session.scalar(
-        select(Message).where(Message.thread_id == thread.id).order_by(Message.order.desc()).limit(1)
+        select(Message).where(Message.thread_id == thread_id).order_by(Message.order.desc()).limit(1)
     )
     return last_one
 
 
-async def get_messages_in_thread(session: AsyncSession, thread: Thread) -> Sequence[Message]:
+async def get_last_message_order_in_thread(session: AsyncSession, thread_id: int) -> int:
+    last_one = await get_last_message_in_thread(session, thread_id)
+    return last_one.order if last_one else -1
+
+
+async def get_messages_in_thread(session: AsyncSession, thread_id: int, n: int = None) -> Sequence[Message]:
     result = await session.execute(
-        select(Message).where(Message.thread_id == thread.id).order_by(Message.order.asc())
+        select(Message).where(Message.thread_id == thread_id).order_by(Message.order.asc()).limit(n)
     )
     return result.scalars().all()
 

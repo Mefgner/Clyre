@@ -1,10 +1,10 @@
 models:
-  - filename: "Jan-nano-128k-Q3_K_M.gguf"
-    name: "Jan-nano-128k"
-    family: Janv1
-    size: 4B
-    quant: Q3_K_M
+  - filename: "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+    name: "Llama-3.2-1B-Instruct-Q4_K_M"
+    family: Llama-3.2
+    size: 1B
+    quant: Q4_K_M
     framework: llama
-    url: "https://huggingface.co/unsloth/Jan-nano-128k-GGUF/resolve/main/Jan-nano-128k-Q3_K_M.gguf"
-    sha256: "sha256:3900eaa640c2019b669cac9f072e71ab4b00c8fddb6db38ccb26eaf0f82153dd"
+    url: "https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+    sha256: "sha256:3f5a22426976ab26cfe84dba63c1d08391717abb1af893e10f1b2968d862dcc1"
     dest_subdir: models/
