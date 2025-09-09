@@ -1,10 +1,10 @@
 models:
-  - filename: "Jan-v1-4B-Q5_K_M.gguf"
-    name: "Jan-v1-4B"
+  - filename: "Jan-nano-128k-Q3_K_M.gguf"
+    name: "Jan-nano-128k"
     family: Janv1
     size: 4B
-    quant: Q5_K_M
+    quant: Q3_K_M
     framework: llama
-    url: "https://huggingface.co/janhq/Jan-v1-4B-GGUF/resolve/main/Jan-v1-4B-Q5_K_M.gguf"
-    sha256: "sha256:1a3adf52759386325518978ab7ae1e553978d993311e7a95cce64885cf36c2b9"
+    url: "https://huggingface.co/unsloth/Jan-nano-128k-GGUF/resolve/main/Jan-nano-128k-Q3_K_M.gguf"
+    sha256: "sha256:3900eaa640c2019b669cac9f072e71ab4b00c8fddb6db38ccb26eaf0f82153dd"
     dest_subdir: models/
