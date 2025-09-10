@@ -7,13 +7,13 @@ from models.base import Base
 class Message(Base):
     __tablename__ = "message"
 
-    id = mapped_column(Integer, primary_key=True, index=True)
-    hash = mapped_column(String(255), nullable=False, index=True)
+    id = mapped_column(String(36), primary_key=True, index=True)
+    hash = mapped_column(String(64), nullable=False, index=True)
     inline_value = mapped_column(Text, nullable=True)
     role = mapped_column(String(30), nullable=False)
 
-    user_id = mapped_column(Integer, ForeignKey("user.id"), nullable=False, index=True)
-    thread_id = mapped_column(Integer, ForeignKey("thread.id"), nullable=False, index=True)
+    user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
+    thread_id = mapped_column(String(36), ForeignKey("thread.id"), nullable=False, index=True)
 
     order = mapped_column("order", Integer, nullable=False, quote=True)
 

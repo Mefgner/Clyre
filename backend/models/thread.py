@@ -7,12 +7,12 @@ from models.base import Base
 class Thread(Base):
     __tablename__ = "thread"
 
-    id = mapped_column(Integer, primary_key=True, index=True)
+    id = mapped_column(String(36), primary_key=True, index=True)
     title = mapped_column(String(90), nullable=True)
-    user_id = mapped_column(Integer, ForeignKey("user.id"), nullable=False, index=True)
+    user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
     stared = mapped_column(SmallInteger, nullable=True, default=0)
     in_project = mapped_column(SmallInteger, nullable=True, default=0)
-    project_id = mapped_column(Integer, ForeignKey("project.id"), nullable=True, index=True)
+    project_id = mapped_column(String(36), ForeignKey("project.id"), nullable=True, index=True)
     creation_date = mapped_column(Date, nullable=False, server_default=func.current_date())
     update_time = mapped_column(DateTime, nullable=True)
 

@@ -96,13 +96,15 @@ class EXTPayloadStore(PayloadStore):
 class File(Base):
     __tablename__ = "file"
 
-    id = mapped_column(Integer, primary_key=True, autoincrement=False, index=True)
-    name = mapped_column(String(60), nullable=False)
+    id = mapped_column(String(36), primary_key=True, autoincrement=False, index=True)
+    user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
+    name = mapped_column(String(255), nullable=False)
     inline_value = mapped_column(Text, nullable=True)
-    hash = mapped_column(String(255), nullable=False, index=True)
+    hash = mapped_column(String(64), nullable=False, index=True)
     keywords = mapped_column(String(255), nullable=True)
     creation_date = mapped_column(Date, nullable=True)
 
+    user = relationship("User", back_populates="files")
     thread_links = relationship("FileHasThread", back_populates="file", cascade="all, delete-orphan")
     project_links = relationship("FileHasProject", back_populates="file", cascade="all, delete-orphan")
 

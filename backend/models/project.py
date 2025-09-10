@@ -7,9 +7,9 @@ from models.base import Base
 class Project(Base):
     __tablename__ = "project"
 
-    id = mapped_column(Integer, primary_key=True, index=True)
+    id = mapped_column(String(36), primary_key=True, index=True)
     title = mapped_column(String(45), nullable=False)
-    user_id = mapped_column(Integer, ForeignKey("user.id"), nullable=False, index=True)
+    user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
 
     user = relationship("User", back_populates="projects")
     threads = relationship("Thread", back_populates="project", cascade="all, delete-orphan")
