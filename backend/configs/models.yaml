@@ -1,10 +1,9 @@
 models:
-  - filename: "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
-    name: "Llama-3.2-1B-Instruct-Q4_K_M"
-    family: Llama-3.2
-    size: 1B
-    quant: Q4_K_M
+  - filename: "Phi-4-mini-instruct.Q4_K_M.gguf"
+    name: "Phi-4-mini-instruct"
+    family: Phi-4
+    size: small # tiny (<3B) | small (3-8B) | medium(8-21B) | large (21-70B) | x-large (>70B) / -thinking, -moe
     framework: llama
-    url: "https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
-    sha256: "sha256:3f5a22426976ab26cfe84dba63c1d08391717abb1af893e10f1b2968d862dcc1"
+    url: "https://huggingface.co/MaziyarPanahi/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct.Q4_K_M.gguf"
+    sha256: "sha256:855cf60f7f8108713fb0e739cab72fd9dbf6c6d4160bd7ff0358142c74ae3287"
     dest_subdir: models/
