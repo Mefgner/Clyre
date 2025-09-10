@@ -4,7 +4,7 @@ from typing import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-import cfg
+from utils import cfg
 from models.base import Base
 
 DB_RUNTIME = cfg.get_db_runtime()

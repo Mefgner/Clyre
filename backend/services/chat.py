@@ -3,7 +3,7 @@ from typing import Iterable
 from crud import create_message, create_thread, get_last_message_in_thread, get_messages_in_thread
 from crud.message import get_last_message_order_in_thread
 from db import SessionManager
-from models import Message, Thread
+from models import Message
 from pipelines.llama import get_llama_pipeline
 
 

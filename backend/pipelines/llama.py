@@ -5,7 +5,7 @@ from pathlib import Path
 from subprocess import Popen
 
 import httpx
-import cfg
+from utils import cfg
 
 BASEDIR = cfg.get_base_dir()
 WORKDIR = cfg.get_work_dir()
@@ -73,6 +73,11 @@ class LlamaLLMPipeline:
             response.raise_for_status()
             return response.json()
 
+    def __del__(self):
+        if self.__process:
+            self.__process.terminate()
+            self.__process.wait()
+            self.is_running = False
 
 llama_instance: LlamaLLMPipeline | None = None
 
