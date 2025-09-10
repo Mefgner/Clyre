@@ -1,9 +1,7 @@
-from sqlalchemy.testing.schema import mapped_column
-
 from base import Base
-from sqlalchemy import String
-from sqlalchemy import Column, Integer, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import String, Integer, ForeignKey
+from sqlalchemy.orm import relationship, mapped_column
+
 
 class TelegramConnection(Base):
     __tablename__ = 'telegram_users'
