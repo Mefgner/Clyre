@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 import time
@@ -7,8 +8,8 @@ from subprocess import Popen
 import httpx
 from utils import cfg
 
-BASEDIR = cfg.get_base_dir()
-WORKDIR = cfg.get_work_dir()
+BASEDIR = cfg.get_app_root_dir()
+WORKDIR = cfg.get_app_runtime_dir()
 
 LLAMA_URL = cfg.get_llama_url()
 LLAMA_WIN_HOST = cfg.get_llama_win_host()
@@ -32,9 +33,9 @@ class LlamaLLMPipeline:
     def _startup(self):
         if not self.__is_in_docker:
             self.__process = subprocess.Popen([
-                self.__executable_path, '--model', self.__model_path, '--host', LLAMA_WIN_HOST, '--port', LLAMA_WIN_PORT,
-                '-ngl', '100'
-            ])
+                self.__executable_path, '--model', self.__model_path, '--host', LLAMA_WIN_HOST, '--port',
+                LLAMA_WIN_PORT, '-ngl', '100'
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
             with httpx.Client(timeout=10) as client:
                 while True:
                     try:
@@ -71,13 +72,16 @@ class LlamaLLMPipeline:
         async with httpx.AsyncClient(timeout=100.0) as client:
             response = await client.post(link, json=payload)
             response.raise_for_status()
-            return response.json()
+            json = response.json()
+            logging.info(f"LLama response: \\ \n\t{json['id']}\n\t{json['usage']}")
+            return json
 
     def __del__(self):
         if self.__process:
             self.__process.terminate()
             self.__process.wait()
             self.is_running = False
+
 
 llama_instance: LlamaLLMPipeline | None = None
 

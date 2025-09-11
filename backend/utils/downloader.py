@@ -12,9 +12,9 @@ def _download_from_config(item_to_download: dict[str, str]) -> str:
     dest_subdir = item_to_download['dest_subdir']
     filename = item_to_download['filename']
 
-    file_path = str(cfg.get_work_dir() / dest_subdir / sha256.split(':')[1] / filename)
+    file_path = str(cfg.get_app_runtime_dir() / dest_subdir / sha256.split(':')[1] / filename)
 
-    if filename.rsplit('.', 1)[0] in (cfg.get_work_dir() / dest_subdir).glob('*'):
+    if filename.rsplit('.', 1)[0] in (cfg.get_app_runtime_dir() / dest_subdir).glob('*'):
         return file_path
 
     return pooch.retrieve(
@@ -27,7 +27,7 @@ def predownload(*files: str) -> list[str]:
     all_downloads = list()
 
     for config_file in files:
-        with open(cfg.get_base_dir() / 'configs' / config_file) as file:
+        with open(cfg.get_app_root_dir() / 'configs' / config_file) as file:
             files_to_download: list[dict[str, str]] = yaml.load(file.read(), Loader=yaml.FullLoader)[
                 config_file.split('.', 1)[0]]
 

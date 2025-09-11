@@ -1,12 +1,11 @@
-from models.base import Base
+from models.base import Base, IdMixin
 from sqlalchemy import String, ForeignKey, Integer
 from sqlalchemy.orm import mapped_column, relationship
 
 
-class Role(Base):
+class Role(Base, IdMixin):
     __tablename__ = "role"
 
-    id = mapped_column(String(36), primary_key=True, index=True)
     name = mapped_column(String(45), nullable=False, index=True)
     privilege_level = mapped_column(Integer, nullable=False)
 

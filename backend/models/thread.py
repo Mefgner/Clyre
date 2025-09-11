@@ -1,13 +1,13 @@
 from sqlalchemy import Integer, ForeignKey, String, Date, DateTime, SmallInteger, func
 from sqlalchemy.orm import mapped_column, relationship
 
+from models import IdMixin
 from models.base import Base
 
 
-class Thread(Base):
+class Thread(Base, IdMixin):
     __tablename__ = "thread"
 
-    id = mapped_column(String(36), primary_key=True, index=True)
     title = mapped_column(String(90), nullable=True)
     user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
     stared = mapped_column(SmallInteger, nullable=True, default=0)

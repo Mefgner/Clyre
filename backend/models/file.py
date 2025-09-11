@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import Integer, String, Date, ForeignKey, Text
 from sqlalchemy.orm import mapped_column, relationship
 
-from models.base import Base
+from models.base import Base, IdMixin
 
 WORKDIR = Path(os.getenv('WORKDIR', '.')).resolve()
 
@@ -93,10 +93,9 @@ class EXTPayloadStore(PayloadStore):
     def append(self, text): ...
 
 
-class File(Base):
+class File(Base, IdMixin):
     __tablename__ = "file"
 
-    id = mapped_column(String(36), primary_key=True, autoincrement=False, index=True)
     user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
     name = mapped_column(String(255), nullable=False)
     inline_value = mapped_column(Text, nullable=True)

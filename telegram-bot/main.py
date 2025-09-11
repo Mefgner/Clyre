@@ -16,7 +16,7 @@ SYNC_RESPONSE_ENDPOINT = os.getenv("SYNC_RESPONSE_ENDPOINT")
 BOT_TOKEN = os.getenv("API_TOKEN")
 
 
-async def get_response(message: str, tg_user_id: int, thread_id: int | None = None) -> dict:
+async def get_response(message: str, tg_user_id: str, thread_id: str | None = None) -> dict:
     async with httpx.AsyncClient(timeout=100) as client:
         response = await client.post(CLYRE_BACKEND_URL + SYNC_RESPONSE_ENDPOINT, json={
             "user_id": tg_user_id,
@@ -51,12 +51,12 @@ async def cmd_reset(message: aiogram.types.Message):
 async def handle_message(message: aiogram.types.Message):
     try:
         if history.get(message.chat.id) is None:
-            response = await get_response(message.text, message.from_user.id)
+            response = await get_response(message.text, str(message.from_user.id))
             thread_id = response.get("thread_id")
             history[message.chat.id] = thread_id
         else:
             thread_id = history[message.chat.id]
-            response = await get_response(message.text, message.from_user.id, thread_id)
+            response = await get_response(message.text, str(message.from_user.id), thread_id)
         await message.reply(response.get("response"))
     except:
          await message.reply("Something went wrong while asnwering.")

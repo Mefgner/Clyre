@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import sys
@@ -45,9 +46,10 @@ def cached(_func: Callable):
 
 
 def load_dotenv():
-    dotenv_path = get_base_dir() / '.env'
+    logging.info('Loading .env file')
+    dotenv_path = get_app_root_dir() / '.env'
     if not dotenv_path.exists():
-        dotenv_path = get_base_dir() / 'configs' / 'base.env'
+        dotenv_path = get_app_root_dir() / 'configs' / 'base.env'
     return dotenv.load_dotenv(dotenv_path)
 
 
@@ -62,18 +64,22 @@ def dict_from_yaml(file_path: Path, main_obj: str) -> dict:
 
 
 @cached
-def get_base_dir() -> Path: return Path(__file__).parent.resolve()
+def get_app_root_dir() -> Path:
+    res = Path(__file__).parent.parent.resolve()
+    logging.debug(f'Getting application root directory {res}')
+    return res
 
 
 @cached
-def get_work_dir() -> Path:
-    platform_info = dict_from_yaml(get_base_dir() / 'configs' / 'platform.yaml', 'platform')
+def get_app_runtime_dir() -> Path:
+    platform_info = dict_from_yaml(get_app_root_dir() / 'configs' / 'platform.yaml', 'platform')
     if not platform_info:
         raise ValueError('No platform information found in platform.yaml')
 
     for p in platform_info:
         if sys.platform == p['name']:
             workdir = Path(os.path.expanduser(os.path.expandvars(p['workdir']))).resolve()
+            logging.debug(f'platform path: {workdir}')
             workdir.mkdir(parents=True, exist_ok=True)
             return workdir
     else:
@@ -142,7 +148,7 @@ def get_resolved_db_path() -> Path:
     db_path = get_db_path()
     if db_file_path_pattern.match(db_path):
         # Absolute path for the db .sqlite file
-        db_path = get_work_dir().joinpath(db_path)
+        db_path = get_app_runtime_dir().joinpath(db_path)
 
         db_path.touch(exist_ok=True)
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,7 +158,7 @@ def get_resolved_db_path() -> Path:
 
 
 def get_default_llama_executable() -> Path:
-    binaries = dict_from_yaml(get_base_dir() / 'configs' / 'binaries.yaml', 'binaries')
+    binaries = dict_from_yaml(get_app_root_dir() / 'configs' / 'binaries.yaml', 'binaries')
 
     for b in binaries:
         if b.get('type') == 'llama.cpp' and b.get('platform') == sys.platform:
@@ -161,14 +167,13 @@ def get_default_llama_executable() -> Path:
             sha_suffix = sha256.split(':', 1)[1]
             folder = b['folder']
             executable = b['exe_name']
-            return get_work_dir() / dest_subdir / sha_suffix / folder / executable
+            return get_app_runtime_dir() / dest_subdir / sha_suffix / folder / executable
     raise ValueError("No default llama executable")
-
 
 
 @cached
 def get_default_llama_model_path() -> Path:
-    models = dict_from_yaml(get_base_dir() / 'configs' / 'models.yaml', 'models')
+    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml', 'models')
     target = None
 
     for m in models:
@@ -184,24 +189,24 @@ def get_default_llama_model_path() -> Path:
     dest_subdir = target['dest_subdir']
     filename = target['filename']
 
-    return (get_work_dir() / dest_subdir / sha_suffix / filename).resolve()
+    return (get_app_runtime_dir() / dest_subdir / sha_suffix / filename).resolve()
 
 
 @cached
 def resolve_llama_model_path(model_name: str) -> str | None:
-    models = dict_from_yaml(get_base_dir() / 'configs' / 'models.yaml', 'models')
+    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml', 'models')
     for m in models:
         if m.get('name') == model_name and m.get('framework') == 'llama':
             sha = m.get('sha256', '')
             sha_suffix = sha.split(':', 1)[1]
             dest_subdir = m['dest_subdir']
             filename = m['filename']
-            return str((get_work_dir() / dest_subdir / sha_suffix / filename).resolve())
+            return str((get_app_runtime_dir() / dest_subdir / sha_suffix / filename).resolve())
     raise ValueError(f"Model '{model_name}' not found or not compatible with llama.cpp")
 
 
 def get_default_llama_model_name():
-    models = dict_from_yaml(get_base_dir() / 'configs' / 'models.yaml', 'models')
+    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml', 'models')
     for m in models:
         if m.get('framework') == 'llama':
             return m.get('name')
@@ -209,5 +214,3 @@ def get_default_llama_model_name():
 
 
 load_dotenv()
-
-

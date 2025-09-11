@@ -9,8 +9,8 @@ from pipelines.llama import get_llama_pipeline
 
 class ChattingService:
     @classmethod
-    async def send_message(cls, user_id: int, message_text: str, thread_id: int | None = None) -> tuple[
-        int, int]:
+    async def send_message(cls, user_id: str, message_text: str, thread_id: str | None = None) -> tuple[
+        str, str]:
         sm = SessionManager()
         async with sm.get_session_context_manager() as session:
             if not thread_id:
@@ -19,11 +19,12 @@ class ChattingService:
                 thread_id = thread.id
                 last_order = -1
             else:
-                last_order = (await get_last_message_in_thread(session, thread_id)).order
+                last_order = await get_last_message_order_in_thread(session, thread_id=thread_id)
 
             new_message = await create_message(
                 session, user_id=user_id, thread_id=thread_id, role="user", content=message_text, order=last_order + 1
             )
+            await session.flush()  # Ensure new_message.id is populated
             return new_message.id, thread_id
 
     @classmethod
@@ -34,7 +35,7 @@ class ChattingService:
         return history
 
     @classmethod
-    async def generate_llm_response(cls, thread_id: int, user_id: int, model: str = '') -> Message:
+    async def generate_llm_response(cls, thread_id: str, user_id: str, model: str = '') -> Message:
         llama = get_llama_pipeline(model)
         sm = SessionManager()
 

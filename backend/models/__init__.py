@@ -1,10 +1,11 @@
-from .base import Base
-from .message import Message
-from .thread import Thread
-from .project import Project
-from .user import User
-from .role import Role, RoleHasUser
+from .base import Base, IdMixin
 from .file import File, FileHasThread, FileHasProject, PayloadStore, InvalidKey, PayloadError, PayloadNotFound
+from .message import Message
+from .project import Project
+from .role import Role, RoleHasUser
+from .social import TelegramConnection
+from .thread import Thread
+from .user import User
 
 __all__ = [
     "Thread",
@@ -12,6 +13,7 @@ __all__ = [
     "Project",
     "User",
     "Base",
+    "IdMixin",
     "Role",
     "RoleHasUser",
     "File",
@@ -21,4 +23,5 @@ __all__ = [
     "InvalidKey",
     "PayloadError",
     "PayloadNotFound",
+    "TelegramConnection",
 ]

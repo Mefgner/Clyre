@@ -1,13 +1,13 @@
-from sqlalchemy import Integer, String, ForeignKey
+from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import mapped_column, relationship
 
+from models import IdMixin
 from models.base import Base
 
 
-class Project(Base):
+class Project(Base, IdMixin):
     __tablename__ = "project"
 
-    id = mapped_column(String(36), primary_key=True, index=True)
     title = mapped_column(String(45), nullable=False)
     user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
 

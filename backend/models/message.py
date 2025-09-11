@@ -1,13 +1,12 @@
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship, mapped_column
 
-from models.base import Base
+from models.base import Base, IdMixin
 
 
-class Message(Base):
+class Message(Base, IdMixin):
     __tablename__ = "message"
 
-    id = mapped_column(String(36), primary_key=True, index=True)
     hash = mapped_column(String(64), nullable=False, index=True)
     inline_value = mapped_column(Text, nullable=True)
     role = mapped_column(String(30), nullable=False)
