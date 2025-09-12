@@ -5,8 +5,8 @@ from fastapi import APIRouter
 
 from api.chatting.views import chat_router
 
-api_router = APIRouter(prefix="/api", tags=["core"])
-api_router.include_router(chat_router)
+api_router = APIRouter(tags=["core"])
+api_router.include_router(chat_router, prefix="/chat")
 
 @api_router.get("/health")
 def health():

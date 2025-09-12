@@ -1,10 +1,10 @@
 from fastapi import APIRouter
 
-from api.schemas import UserChatRequest
-from services.chat import ChattingService
+from api.chatting.schemas import UserChatRequest
+from api.chatting.services import ChattingService
 
 chatting_sc = ChattingService()
-chat_router = APIRouter(prefix="/chat", tags=["chatting"])
+chat_router = APIRouter(tags=["chatting"])
 
 
 @chat_router.post("/response-sync")
