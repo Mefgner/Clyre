@@ -97,7 +97,7 @@ def from_env(var_name: str):
     return value
 
 
-create_functions({
+functions_to_create = {
     # General configuration
     'get_clyre_version': 'CLYRE_VERSION',
     'get_debug_state': 'DEBUG',
@@ -118,7 +118,9 @@ create_functions({
     # 'get_vector_path': 'VECTOR_PATH',
     # 'get_normalize_vectors': 'NORMALIZE_VECTORS',
     # 'get_distance_metric': 'DISTANCE',
-})
+}
+
+create_functions(functions_to_create)
 
 if TYPE_CHECKING:
     # General
@@ -214,3 +216,6 @@ def get_default_llama_model_name():
 
 
 load_dotenv()
+__all__ = [*functions_to_create.keys(), 'get_app_root_dir', 'get_app_runtime_dir', 'from_env', 'get_resolved_db_path',
+           'get_default_llama_executable', 'get_default_llama_model_path', 'resolve_llama_model_path',
+           'get_default_llama_model_name']

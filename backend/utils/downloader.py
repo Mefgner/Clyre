@@ -43,3 +43,6 @@ def predownload(*files: str) -> list[str]:
                 all_downloads += file
 
     return all_downloads
+
+
+__all__ = ["predownload"]
