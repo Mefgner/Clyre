@@ -1,7 +1,9 @@
+import datetime
 import logging
 import os
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, TYPE_CHECKING
 
@@ -34,17 +36,6 @@ def create_functions(mapping: dict[str, str]):
         mod_globals[func_name] = _make_getter(func_name, env_var)
 
 
-def cached(_func: Callable):
-    def wrapper(*args, **kwargs):
-        global config_cache
-        key = (_func.__name__, args, tuple(kwargs.keys()), tuple(kwargs.values()))
-        if not config_cache.get(key):
-            config_cache[key] = _func(*args, **kwargs)
-        return config_cache[key]
-
-    return wrapper
-
-
 def load_dotenv():
     logging.info('Loading .env file')
     dotenv_path = get_app_root_dir() / '.env'
@@ -53,26 +44,24 @@ def load_dotenv():
     return dotenv.load_dotenv(dotenv_path)
 
 
-def dict_from_yaml(file_path: Path, main_obj: str) -> dict:
-    with open(file_path, 'r', encoding='utf-8') as file:
+def dict_from_yaml(absolute_file_path: Path) -> dict:
+    with open(absolute_file_path, 'r', encoding='utf-8') as file:
         data = yaml.load(file, Loader=yaml.FullLoader)
-        if main_obj:
-            if main_obj not in data:
-                raise ValueError(f"Main object '{main_obj}' not found in YAML file '{file_path.name}'")
-            return data[main_obj]
+        if not data:
+            raise ValueError(f'Configuration is not set in {absolute_file_path.name}')
         return data
 
 
-@cached
+@lru_cache(maxsize=1)
 def get_app_root_dir() -> Path:
     res = Path(__file__).parent.parent.resolve()
     logging.debug(f'Getting application root directory {res}')
     return res
 
 
-@cached
+@lru_cache(maxsize=1)
 def get_app_runtime_dir() -> Path:
-    platform_info = dict_from_yaml(get_app_root_dir() / 'configs' / 'platform.yaml', 'platform')
+    platform_info = dict_from_yaml(get_app_root_dir() / 'configs' / 'platform.yaml')
     if not platform_info:
         raise ValueError('No platform information found in platform.yaml')
 
@@ -86,7 +75,7 @@ def get_app_runtime_dir() -> Path:
         raise ValueError('Platform not found')
 
 
-@cached
+@lru_cache(maxsize=96)
 def from_env(var_name: str):
     value = os.getenv(var_name)
     if value is None:
@@ -104,6 +93,10 @@ functions_to_create = {
     # Server configuration
     'get_host': 'HOST',
     'get_port': 'PORT',
+    # Hashing configuration
+    'get_hashing_secret': 'HASHING_SECRET',
+    'get_access_token_secret': 'ACCESS_TOKEN_SECRET',
+    'get_refresh_token_secret': 'REFRESH_TOKEN_SECRET',
     # Backend configuration
     'get_db_engine': 'DB_ENGINE',
     'get_db_runtime': 'DB_RUNTIME',
@@ -126,6 +119,12 @@ if TYPE_CHECKING:
     # General
     get_clyre_version: Callable[[], str]
     get_debug_state: Callable[[], str]
+    # Hashing
+    get_hashing_secret: Callable[[], str]
+    get_access_token_secret: Callable[[], str]
+    get_refresh_token_secret: Callable[[], str]
+    # get_access_token_dur_minutes: Callable[[], str]
+    # get_refresh_token_dur_days: Callable[[], str]
     # Server
     get_host: Callable[[], str]
     get_port: Callable[[], str]
@@ -145,6 +144,7 @@ if TYPE_CHECKING:
     # get_distance_metric: Callable[[], str]
 
 
+@lru_cache(maxsize=1)
 def get_resolved_db_path() -> Path:
     db_file_path_pattern = re.compile(r'^\.(/\w+)+(\.\w{2,})?$')
     db_path = get_db_path()
@@ -159,8 +159,9 @@ def get_resolved_db_path() -> Path:
     raise ValueError("DB_PATH is not a valid relative path pattern or is not set.")
 
 
+@lru_cache(maxsize=1)
 def get_default_llama_executable() -> Path:
-    binaries = dict_from_yaml(get_app_root_dir() / 'configs' / 'binaries.yaml', 'binaries')
+    binaries = dict_from_yaml(get_app_root_dir() / 'configs' / 'binaries.yaml')
 
     for b in binaries:
         if b.get('type') == 'llama.cpp' and b.get('platform') == sys.platform:
@@ -173,9 +174,9 @@ def get_default_llama_executable() -> Path:
     raise ValueError("No default llama executable")
 
 
-@cached
+@lru_cache(maxsize=1)
 def get_default_llama_model_path() -> Path:
-    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml', 'models')
+    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml')
     target = None
 
     for m in models:
@@ -194,9 +195,9 @@ def get_default_llama_model_path() -> Path:
     return (get_app_runtime_dir() / dest_subdir / sha_suffix / filename).resolve()
 
 
-@cached
+@lru_cache(maxsize=16)
 def resolve_llama_model_path(model_name: str) -> str | None:
-    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml', 'models')
+    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml')
     for m in models:
         if m.get('name') == model_name and m.get('framework') == 'llama':
             sha = m.get('sha256', '')
@@ -207,15 +208,25 @@ def resolve_llama_model_path(model_name: str) -> str | None:
     raise ValueError(f"Model '{model_name}' not found or not compatible with llama.cpp")
 
 
+@lru_cache(maxsize=1)
 def get_default_llama_model_name():
-    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml', 'models')
+    models = dict_from_yaml(get_app_root_dir() / 'configs' / 'models.yaml')
     for m in models:
         if m.get('framework') == 'llama':
             return m.get('name')
     raise ValueError("No llama.cpp-compatible model found in models.yaml")
 
 
-load_dotenv()
+@lru_cache(maxsize=1)
+def get_access_token_dur_minutes() -> datetime.timedelta:
+    return datetime.timedelta(minutes=int(from_env('ACCESS_TOKEN_DUR_MINUTES')))
+
+
+@lru_cache(maxsize=1)
+def get_refresh_token_dur_days() -> datetime.timedelta:
+    return datetime.timedelta(days=int(from_env('REFRESH_TOKEN_DUR_DAYS')))
+
+
 __all__ = [*functions_to_create.keys(), 'get_app_root_dir', 'get_app_runtime_dir', 'from_env', 'get_resolved_db_path',
            'get_default_llama_executable', 'get_default_llama_model_path', 'resolve_llama_model_path',
-           'get_default_llama_model_name']
+           'get_default_llama_model_name', 'get_access_token_dur_minutes', 'get_refresh_token_dur_days']

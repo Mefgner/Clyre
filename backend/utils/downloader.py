@@ -28,8 +28,7 @@ def predownload(*files: str) -> list[str]:
 
     for config_file in files:
         with open(cfg.get_app_root_dir() / 'configs' / config_file) as file:
-            files_to_download: list[dict[str, str]] = yaml.load(file.read(), Loader=yaml.FullLoader)[
-                config_file.split('.', 1)[0]]
+            files_to_download: list[dict[str, str]] = yaml.load(file.read(), Loader=yaml.FullLoader)
 
             for download in files_to_download:
                 file = _download_from_config(download)

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, UTC
 import hashlib
 import uuid
 
@@ -25,8 +26,19 @@ def hash_content(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 
-def create_uuid() -> str:
+def generate_uuid() -> str:
     return str(uuid.uuid4())
 
 
-__all__ = ["hash_password", "verify_password", "hash_content", "create_uuid"]
+def create_jwt(payload: dict[str, str], secret: str, from_: datetime, timespan: timedelta) -> str:
+    return jwt.encode(payload, secret, algorithm='HS256', headers={'exp': str((from_ + timespan).now(UTC))})
+
+
+def verify_jwt(token: str, secret: str) -> dict[str, str]:
+    try:
+        return jwt.decode(token, secret, algorithms=('HS256',))
+    except jwt.PyJWTError:
+        raise ValueError("Invalid token")
+
+
+__all__ = ["hash_password", "verify_password", "hash_content", "generate_uuid", "create_jwt", "verify_jwt"]
