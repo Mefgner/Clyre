@@ -1,9 +1,8 @@
-models:
-  - filename: "Phi-4-mini-instruct.Q4_K_M.gguf"
-    name: "Phi-4-mini-instruct"
-    family: Phi-4
-    size: small # tiny (<3B) | small (3-8B) | medium(8-21B) | large (21-70B) | x-large (>70B) / -thinking, -moe
-    framework: llama
-    url: "https://huggingface.co/MaziyarPanahi/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct.Q4_K_M.gguf"
-    sha256: "sha256:855cf60f7f8108713fb0e739cab72fd9dbf6c6d4160bd7ff0358142c74ae3287"
-    dest_subdir: models/
+- filename: "Phi-4-mini-instruct.Q4_K_M.gguf"
+  name: "Phi-4-mini-instruct"
+  family: Phi-4
+  size: small # tiny (<3B) | small (3-8B) | medium(8-21B) | large (21-70B) | x-large (>70B) / -thinking, -moe
+  framework: llama
+  url: "https://huggingface.co/MaziyarPanahi/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct.Q4_K_M.gguf"
+  sha256: "sha256:855cf60f7f8108713fb0e739cab72fd9dbf6c6d4160bd7ff0358142c74ae3287"
+  dest_subdir: models/

@@ -1,7 +1,6 @@
-platform:
-  - name: win32
-    workdir: "%APPDATA%/clyre"
-  - name: linux
-    workdir: "~/.local/share/clyre"
-  - name: darwin
-    workdir: "~/Library/Application Support/clyre"
+- name: win32
+  workdir: "%APPDATA%/clyre"
+- name: linux
+  workdir: "~/.local/share/clyre"
+- name: darwin
+  workdir: "~/Library/Application Support/clyre"

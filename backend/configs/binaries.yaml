@@ -1,13 +1,12 @@
-binaries:
-    # win32 | linux | darwin
-  - platform: win32
-    necessary: true
-    # llama.cpp | sentence-transformers
-    type: llama.cpp
-    filename: "llama-b6239-bin-win-cuda-12.4-x64.zip"
-    folder: "llama-b6239-bin-win-cuda-12.4-x64"
-    exe_name: "llama-server.exe"
-    url: "https://github.com/ggml-org/llama.cpp/releases/download/b6239/llama-b6239-bin-win-cuda-12.4-x64.zip"
-    sha256: "sha256:126b27ffeea00cddc7d2b7cf655ec5312cc7b23ca621444322ca97f2ac21bd6e"
-    dest_subdir: "/binaries"
-    # WORKDIR / binaries / sha256 / folder (unzipped) / exe_name
+# win32 | linux | darwin
+- platform: win32
+  necessary: true
+  # llama.cpp | sentence-transformers
+  type: llama.cpp
+  filename: "llama-b6239-bin-win-cuda-12.4-x64.zip"
+  folder: "llama-b6239-bin-win-cuda-12.4-x64"
+  exe_name: "llama-server.exe"
+  url: "https://github.com/ggml-org/llama.cpp/releases/download/b6239/llama-b6239-bin-win-cuda-12.4-x64.zip"
+  sha256: "sha256:126b27ffeea00cddc7d2b7cf655ec5312cc7b23ca621444322ca97f2ac21bd6e"
+  dest_subdir: "/binaries"
+  # WORKDIR / binaries / sha256 / folder (unzipped) / exe_name
