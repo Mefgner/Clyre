@@ -97,6 +97,7 @@ functions_to_create = {
     'get_hashing_secret': 'HASHING_SECRET',
     'get_access_token_secret': 'ACCESS_TOKEN_SECRET',
     'get_refresh_token_secret': 'REFRESH_TOKEN_SECRET',
+    'get_service_secret': 'SERVICE_SECRET',
     # Backend configuration
     'get_db_engine': 'DB_ENGINE',
     'get_db_runtime': 'DB_RUNTIME',
@@ -123,6 +124,7 @@ if TYPE_CHECKING:
     get_hashing_secret: Callable[[], str]
     get_access_token_secret: Callable[[], str]
     get_refresh_token_secret: Callable[[], str]
+    get_service_secret: Callable[[], str]
     # get_access_token_dur_minutes: Callable[[], str]
     # get_refresh_token_dur_days: Callable[[], str]
     # Server

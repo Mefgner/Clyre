@@ -1,4 +1,1 @@
-from .cfg import *
-from .downloader import *
-from .hashing import *
-from .timing import *
+from . import cfg, downloader, hashing, timing, web
