@@ -1,12 +1,11 @@
 import logging
-import sys
 
-logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logging.basicConfig(level=logging.INFO)
 
 import uvicorn
 
 from utils import cfg
-from db import SessionManager
+from db import get_session_manager
 from utils.downloader import predownload
 from endpoints import app
 from pipelines import llama
@@ -25,28 +24,13 @@ if __name__ == '__main__':
     HOST = cfg.get_host()
     PORT = cfg.get_port()
 
-    sm = SessionManager()
-    app.add_event_handler('startup', sm.init_models)
+    app.add_event_handler('startup', get_session_manager().init_models)
     app.add_event_handler('startup', llama.get_llama_pipeline)
-    uvicorn.run(app, host=HOST, port=int(PORT),
-                log_config={"version": 1, "disable_existing_loggers": False,
-                            "streams":
-                                {
-                                    "default":
-                                        {
-                                            "class": "logging.StreamHandler",
-                                            "stream": sys.stdout
-                                        }
-                                }
-                            }
-                )
+    uvicorn.run("manager:app", reload=False, host=HOST, port=int(PORT))
 
-# TODOList 1:
-# TODO: create a user (crud, service) [-]
-# TODO: get user_id from jwt web token instead of request [-]
-# TODO: figure out a way to securely serve telegram users [-]
-#
-# TODOList 2:
-# TODO: add streaming endpoint [-]
-# TODO: a initial way to compress chat history [-]
-# TODO: delete first parental key in .yaml because not necessary [-] (binaries.yaml -> ['binaries'][helpful configs])
+# TODO: switch to SessionManger factory get_session_manager.
+# TODO: switch from get from env something functions to PydanticSettings.
+# TODO: add streaming endpoint.
+# TODO: bring better logging.
+# TODO: bring better error handling and raising. truncate traceback up to project's files excluding .venv modules.
+# TODO: a initial way to compress chat history.
