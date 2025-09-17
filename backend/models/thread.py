@@ -1,11 +1,10 @@
-from sqlalchemy import Integer, ForeignKey, String, Date, DateTime, SmallInteger, func
+from sqlalchemy import ForeignKey, String, Date, DateTime, SmallInteger, func
 from sqlalchemy.orm import mapped_column, relationship
 
-from models import IdMixin
-from models.base import Base
+from . import Base
 
 
-class Thread(Base, IdMixin):
+class Thread(Base):
     __tablename__ = "thread"
 
     title = mapped_column(String(90), nullable=True)
@@ -21,3 +20,6 @@ class Thread(Base, IdMixin):
 
     messages = relationship("Message", back_populates="thread", cascade="all, delete-orphan")
     file_links = relationship("FileHasThread", back_populates="thread", cascade="all, delete-orphan")
+
+
+__all__ = ["Thread"]

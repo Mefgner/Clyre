@@ -1,10 +1,10 @@
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship, mapped_column
 
-from models.base import Base, IdMixin
+from . import Base
 
 
-class Message(Base, IdMixin):
+class Message(Base):
     __tablename__ = "message"
 
     hash = mapped_column(String(64), nullable=False, index=True)
@@ -18,3 +18,6 @@ class Message(Base, IdMixin):
 
     user = relationship("User", back_populates="messages")
     thread = relationship("Thread", back_populates="messages")
+
+
+__all__ = ["Message"]

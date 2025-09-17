@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import Integer, String, Date, ForeignKey, Text
 from sqlalchemy.orm import mapped_column, relationship
 
-from models.base import Base, IdMixin
+from . import Base
 
 WORKDIR = Path(os.getenv('WORKDIR', '.')).resolve()
 
@@ -93,7 +93,7 @@ class EXTPayloadStore(PayloadStore):
     def append(self, text): ...
 
 
-class File(Base, IdMixin):
+class File(Base):
     __tablename__ = "file"
 
     user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
@@ -104,8 +104,8 @@ class File(Base, IdMixin):
     creation_date = mapped_column(Date, nullable=True)
 
     user = relationship("User", back_populates="files")
-    thread_links = relationship("FileHasThread", back_populates="file", cascade="all, delete-orphan")
-    project_links = relationship("FileHasProject", back_populates="file", cascade="all, delete-orphan")
+    thread_links = relationship("FileHasThread", back_populates="file")
+    project_links = relationship("FileHasProject", back_populates="file")
 
     @property
     def payload_store(self) -> "PayloadStore":
@@ -131,3 +131,6 @@ class FileHasProject(Base):
 
     file = relationship("File", back_populates="project_links")
     project = relationship("Project", back_populates="file_links")
+
+
+__all__ = ["File", "FileHasThread", "FileHasProject"]

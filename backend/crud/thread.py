@@ -3,10 +3,11 @@ import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Thread
+from utils import hashing
 
 
 async def create_thread(session: AsyncSession, user_id: str, title: str = "New Thread") -> Thread:
-    new_thread = Thread(user_id=user_id, title=title)
+    new_thread = Thread(id=hashing.generate_uuid(), user_id=user_id, title=title)
     session.add(new_thread)
     return new_thread
 
@@ -39,3 +40,7 @@ async def update_thread_time(session: AsyncSession, thread: Thread, utc_time: da
 
 async def get_thread_by_id(session: AsyncSession, thread_id: str) -> Thread | None:
     return await session.get(Thread, thread_id)
+
+
+__all__ = ["create_thread", "rename_thread", "star_thread", "thread_to_project_connection", "update_thread_time",
+           "get_thread_by_id"]

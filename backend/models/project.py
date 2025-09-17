@@ -1,11 +1,10 @@
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import mapped_column, relationship
 
-from models import IdMixin
-from models.base import Base
+from . import Base
 
 
-class Project(Base, IdMixin):
+class Project(Base):
     __tablename__ = "project"
 
     title = mapped_column(String(45), nullable=False)
@@ -15,3 +14,6 @@ class Project(Base, IdMixin):
     threads = relationship("Thread", back_populates="project", cascade="all, delete-orphan")
 
     file_links = relationship("FileHasProject", back_populates="project", cascade="all, delete-orphan")
+
+
+__all__ = ["Project"]
