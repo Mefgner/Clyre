@@ -2,7 +2,7 @@ from typing import Iterable
 
 from crud import create_message, create_thread, get_messages_in_thread
 from crud.message import get_last_message_order_in_thread
-from db import SessionManager
+from db import get_session_manager
 from models import Message
 from pipelines.llama import get_llama_pipeline
 
@@ -10,7 +10,7 @@ from pipelines.llama import get_llama_pipeline
 class ChattingService:
     @staticmethod
     async def send_message(user_id: str, message: str, thread_id: str | None = None) -> tuple[str, str]:
-        sm = SessionManager()
+        sm = get_session_manager()
         async with sm.get_session_context_manager() as session:
             if not thread_id:
                 thread = await create_thread(session, user_id=user_id, title="New Thread")
@@ -33,7 +33,7 @@ class ChattingService:
 
     async def generate_llm_response(self, thread_id: str, user_id: str, model: str = '') -> Message:
         llama = get_llama_pipeline(model)
-        sm = SessionManager()
+        sm = get_session_manager()
 
         async with sm.get_session_context_manager() as session:
             messages = await get_messages_in_thread(session, thread_id, user_id)
