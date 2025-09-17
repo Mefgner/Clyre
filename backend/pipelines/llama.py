@@ -6,14 +6,10 @@ from pathlib import Path
 from subprocess import Popen
 
 import httpx
+
 from utils import cfg
 
-BASEDIR = cfg.get_app_root_dir()
-WORKDIR = cfg.get_app_runtime_dir()
-
 LLAMA_URL = cfg.get_llama_url()
-LLAMA_WIN_HOST = cfg.get_llama_win_host()
-LLAMA_WIN_PORT = cfg.get_llama_win_port()
 
 
 class LlamaLLMPipeline:
@@ -33,8 +29,8 @@ class LlamaLLMPipeline:
     def _startup(self):
         if not self.__is_in_docker:
             self.__process = subprocess.Popen([
-                self.__executable_path, '--model', self.__model_path, '--host', LLAMA_WIN_HOST, '--port',
-                LLAMA_WIN_PORT, '-ngl', '100'
+                self.__executable_path, '--model', self.__model_path, '--host', cfg.get_llama_win_host(), '--port',
+                cfg.get_llama_win_port(), '-ngl', '100'
             ], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
             with httpx.Client(timeout=10) as client:
                 while True:
@@ -81,6 +77,7 @@ class LlamaLLMPipeline:
             self.__process.terminate()
             self.__process.wait()
             self.is_running = False
+            self.__process = None
 
 
 llama_instance: LlamaLLMPipeline | None = None

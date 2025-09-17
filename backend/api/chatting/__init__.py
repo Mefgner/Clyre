@@ -1,0 +1,1 @@
+from . import views as chatting_views
