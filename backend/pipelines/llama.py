@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import subprocess
@@ -32,14 +33,18 @@ class LlamaLLMPipeline:
                 self.__executable_path, '--model', self.__model_path, '--host', cfg.get_llama_win_host(), '--port',
                 cfg.get_llama_win_port(), '-ngl', '100'
             ], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-            with httpx.Client(timeout=10) as client:
-                while True:
-                    try:
-                        client.get(f"{LLAMA_URL}/health", timeout=10).raise_for_status()
-                        break
-                    except httpx.HTTPStatusError:
-                        time.sleep(1.5)
+
         self.is_running = True
+
+    @staticmethod
+    async def wait_for_startup():
+        async with httpx.AsyncClient(timeout=10) as client:
+            while True:
+                try:
+                    (await client.get(f"{LLAMA_URL}/health", timeout=10)).raise_for_status()
+                    break
+                except httpx.HTTPStatusError:
+                    await asyncio.sleep(2)
 
     def _build_payload(self, history: list[dict[str, str]], max_tokens: int, temperature: float, stream: bool):
         return {

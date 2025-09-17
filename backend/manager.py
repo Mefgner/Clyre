@@ -4,14 +4,16 @@ logging.basicConfig(level=logging.INFO)
 
 import uvicorn
 
-from utils import cfg
+from utils import cfg, downloader
 from db import get_session_manager
-from utils.downloader import predownload
 from endpoints import app
 from pipelines import llama
 
-if __name__ == '__main__':
+app.add_event_handler('startup', get_session_manager().init_models)
+app.add_event_handler('startup', llama.get_llama_pipeline().wait_for_startup)
 
+
+def main():
     if cfg.get_debug_state():
         logging.getLogger().setLevel(logging.DEBUG)
 
@@ -19,14 +21,13 @@ if __name__ == '__main__':
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-    predownload('binaries.yaml', 'models.yaml')
+    downloader.predownload('binaries.yaml', 'models.yaml')
 
-    HOST = cfg.get_host()
-    PORT = cfg.get_port()
+    uvicorn.run("manager:app", reload=False, host=cfg.get_host(), port=int(cfg.get_port()))
 
-    app.add_event_handler('startup', get_session_manager().init_models)
-    app.add_event_handler('startup', llama.get_llama_pipeline)
-    uvicorn.run("manager:app", reload=False, host=HOST, port=int(PORT))
+
+if __name__ == '__main__':
+    main()
 
 # TODO: switch to SessionManger factory get_session_manager.
 # TODO: switch from get from env something functions to PydanticSettings.
@@ -34,3 +35,4 @@ if __name__ == '__main__':
 # TODO: bring better logging.
 # TODO: bring better error handling and raising. truncate traceback up to project's files excluding .venv modules.
 # TODO: a initial way to compress chat history.
+# TODO: make a queue for each user.
