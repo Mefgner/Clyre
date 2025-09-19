@@ -1,15 +1,14 @@
 from typing import Annotated
 
-from pydantic import BaseModel, UUID4
+from annotated_types import MinLen
+from pydantic import BaseModel
 
 
 class UserChatRequest(BaseModel):
-    message: str
+    message: Annotated[str, MinLen(1)]
     thread_id: str | None = None
 
 
-class TelegramBotChatRequest(BaseModel):
+class TelegramBotChatRequest(UserChatRequest):
     telegram_user_id: str
     telegram_chat_id: str
-    message: str
-    thread_id: str | None = None

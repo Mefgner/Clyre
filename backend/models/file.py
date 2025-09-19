@@ -3,12 +3,12 @@ import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from sqlalchemy import Integer, String, Date, ForeignKey, Text
+from sqlalchemy import Date, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import mapped_column, relationship
 
 from . import Base
 
-WORKDIR = Path(os.getenv('WORKDIR', '.')).resolve()
+WORKDIR = Path(os.getenv("WORKDIR", ".")).resolve()
 
 
 class PayloadError(Exception): ...
@@ -24,10 +24,10 @@ def error_redirect(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except FileNotFoundError:
-            raise PayloadNotFound("Payload not found")
-        except ValueError:
-            raise InvalidKey("Invalid sha256 or user_id")
+        except FileNotFoundError as exc:
+            raise PayloadNotFound("Payload not found") from exc
+        except ValueError as exc:
+            raise InvalidKey("Invalid sha256 or user_id") from exc
 
     return wrapper
 
@@ -41,50 +41,47 @@ class PayloadStore(ABC):
         self._encoding = encoding
 
         for p in [user_id, sha256]:
-            if not re.match(r'^[A-Za-z0-9_\-]{1,128}$', p):
+            if not re.match(r"^[A-Za-z0-9_\-]{1,128}$", p):
                 raise ValueError()
 
     @abstractmethod
     @error_redirect
-    def read(self) -> str:
-        ...
+    def read(self) -> str: ...
 
     @abstractmethod
     @error_redirect
-    def write(self, payload: str) -> None:
-        ...
+    def write(self, text: str) -> None: ...
 
     @abstractmethod
     @error_redirect
-    def append(self, payload: str) -> None:
-        ...
+    def append(self, text: str) -> None: ...
 
 
 class FSPayloadStore(PayloadStore):
     def __init__(self, user_id: str, sha256: str, encoding: str):
         super().__init__(user_id, sha256, encoding)
-        self.file_path = WORKDIR / 'payload' / user_id / (sha256 + '.txt')
+        self.file_path = WORKDIR / "payload" / user_id / (sha256 + ".txt")
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
     @error_redirect
     def read(self):
-        with open(self.file_path, 'r', encoding=self._encoding) as file:
+        with open(self.file_path, "r", encoding=self._encoding) as file:
             return file.read()
 
     @error_redirect
-    def write(self, text):
-        with open(self.file_path, 'w', encoding=self._encoding) as file:
+    def write(self, text: str):
+        with open(self.file_path, "w", encoding=self._encoding) as file:
             file.write(text)
 
     @error_redirect
-    def append(self, text):
-        with open(self.file_path, 'a', encoding=self._encoding) as file:
+    def append(self, text: str):
+        with open(self.file_path, "a", encoding=self._encoding) as file:
             file.write(text)
 
 
 class EXTPayloadStore(PayloadStore):
     def __init__(self, user_id: str, sha256: str, encoding: str):
-        super().__init__(user_id, sha256, encoding)
+        pass
 
     def read(self): ...
 

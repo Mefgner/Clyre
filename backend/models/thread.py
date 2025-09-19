@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, String, Date, DateTime, SmallInteger, func
+from sqlalchemy import Date, DateTime, ForeignKey, SmallInteger, String, func
 from sqlalchemy.orm import mapped_column, relationship
 
 from . import Base
@@ -19,7 +19,9 @@ class Thread(Base):
     project = relationship("Project", back_populates="threads")
 
     messages = relationship("Message", back_populates="thread", cascade="all, delete-orphan")
-    file_links = relationship("FileHasThread", back_populates="thread", cascade="all, delete-orphan")
+    file_links = relationship(
+        "FileHasThread", back_populates="thread", cascade="all, delete-orphan"
+    )
 
 
 __all__ = ["Thread"]
