@@ -49,9 +49,7 @@ if __name__ == "__main__":
 
 # TODO: switch from "get from the env something" functions to PydanticSettings.
 # TODO: add streaming endpoint.
-# TODO: bring better logging.
 # TODO: bring better error handling and raising. truncate traceback up to project's files excluding .venv modules.
 # TODO: a initial way to compress chat history.
 # TODO: make a queue for each user.
-# TODO: rewrite downloader in a better way.
 # TODO: implement refresh token logic
