@@ -3,47 +3,15 @@ import logging
 import os
 import re
 import sys
-from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-import dotenv
 import yaml
+
+from utils import env, get_app_root_dir
 
 Logger = logging.getLogger(__name__)
 config_cache = {}
-
-
-def create_functions(mapping: dict[str, str]):
-    if not isinstance(mapping, dict):
-        raise TypeError("mapping must be a dictionary")
-    mod_globals = sys.modules[__name__].__dict__
-
-    for func_name, env_var in mapping.items():
-        if not isinstance(func_name, str) or not isinstance(env_var, str):
-            raise TypeError("Both keys and values in mapping must be strings")
-
-        def _make_getter(name: str, var: str):
-            def _getter():
-                return from_env(var)
-
-            _getter.__name__ = name
-            _getter.__qualname__ = name
-            _getter.__doc__ = f"Returns a {var} from a virtual environment."
-            return _getter
-
-        if func_name in mod_globals:
-            raise ValueError(f"Name was already used: {func_name}")
-        mod_globals[func_name] = _make_getter(func_name, env_var)
-
-
-def load_dotenv():
-    logging.info("Loading .env file")
-    dotenv_path = get_app_root_dir() / ".env"
-    if not dotenv_path.exists():
-        dotenv_path = get_app_root_dir() / "configs" / "base.env"
-    return dotenv.load_dotenv(dotenv_path)
 
 
 def dict_from_yaml(absolute_file_path: Path) -> dict:
@@ -52,13 +20,6 @@ def dict_from_yaml(absolute_file_path: Path) -> dict:
         if not data:
             raise ValueError(f"Configuration is not set in {absolute_file_path.name}")
         return data
-
-
-@lru_cache(maxsize=1)
-def get_app_root_dir() -> Path:
-    res = Path(__file__).parent.parent.resolve()
-    Logger.debug("Getting application root directory %s", res)
-    return res
 
 
 @lru_cache(maxsize=1)
@@ -76,82 +37,10 @@ def get_app_runtime_dir() -> Path:
     raise ValueError("Platform not found")
 
 
-@lru_cache(maxsize=96)
-def from_env(var_name: str):
-    value = os.getenv(var_name)
-    if value is None:
-        load_dotenv()
-    value = os.getenv(var_name)
-    if value is None:
-        raise ValueError(f"Environment variable '{var_name}' is not set.")
-    return value
-
-
-functions_to_create = {
-    # General configuration
-    "get_clyre_version": "CLYRE_VERSION",
-    "get_debug_state": "DEBUG",
-    # Server configuration
-    "get_host": "HOST",
-    "get_port": "PORT",
-    # Hashing configuration
-    "get_hashing_secret": "HASHING_SECRET",
-    "get_access_token_secret": "ACCESS_TOKEN_SECRET",
-    "get_refresh_token_secret": "REFRESH_TOKEN_SECRET",
-    "get_service_secret": "SERVICE_SECRET",
-    # Backend configuration
-    "get_db_engine": "DB_ENGINE",
-    "get_db_runtime": "DB_RUNTIME",
-    "get_db_path": "DB_PATH",
-    # Llama configuration
-    "get_llama_win_host": "LLAMA_WIN_HOST",
-    "get_llama_win_port": "LLAMA_WIN_PORT",
-    "get_llama_url": "LLAMA_URL",
-    # Vector config
-    # 'get_vector_db': 'VECTOR_DB',
-    # 'get_vector_dim': 'VECTOR_DIM',
-    # 'get_vector_path': 'VECTOR_PATH',
-    # 'get_normalize_vectors': 'NORMALIZE_VECTORS',
-    # 'get_distance_metric': 'DISTANCE',
-}
-
-create_functions(functions_to_create)
-
-# noinspection DuplicatedCode
-if TYPE_CHECKING:
-    # General
-    get_clyre_version: Callable[[], str]
-    get_debug_state: Callable[[], str]
-    # Hashing
-    get_hashing_secret: Callable[[], str]
-    get_access_token_secret: Callable[[], str]
-    get_refresh_token_secret: Callable[[], str]
-    get_service_secret: Callable[[], str]
-    # get_access_token_dur_minutes: Callable[[], str]
-    # get_refresh_token_dur_days: Callable[[], str]
-    # Server
-    get_host: Callable[[], str]
-    get_port: Callable[[], str]
-    # Backend
-    get_db_engine: Callable[[], str]
-    get_db_runtime: Callable[[], str]
-    get_db_path: Callable[[], str]
-    # Llama
-    get_llama_win_host: Callable[[], str]
-    get_llama_win_port: Callable[[], str]
-    get_llama_url: Callable[[], str]
-    # Vector
-    # get_vector_db: Callable[[], str]
-    # get_vector_dim: Callable[[], str]
-    # get_vector_path: Callable[[], str]
-    # get_normalize_vectors: Callable[[], str]
-    # get_distance_metric: Callable[[], str]
-
-
 @lru_cache(maxsize=1)
 def get_resolved_db_path() -> Path:
     db_file_path_pattern = re.compile(r"^\.(/\w+)+(\.\w{2,})?$")
-    db_path = get_db_path()
+    db_path = env.DB_PATH
     if db_file_path_pattern.match(db_path):
         # Absolute path for the db .sqlite file
         db_path = get_app_runtime_dir().joinpath(db_path)
@@ -223,19 +112,17 @@ def get_default_llama_model_name():
 
 @lru_cache(maxsize=1)
 def get_access_token_dur_minutes() -> datetime.timedelta:
-    return datetime.timedelta(minutes=int(from_env("ACCESS_TOKEN_DUR_MINUTES")))
+    return datetime.timedelta(minutes=int(env.ACCESS_TOKEN_DUR_MINUTES))
 
 
 @lru_cache(maxsize=1)
 def get_refresh_token_dur_days() -> datetime.timedelta:
-    return datetime.timedelta(days=int(from_env("REFRESH_TOKEN_DUR_DAYS")))
+    return datetime.timedelta(days=int(env.REFRESH_TOKEN_DUR_DAYS))
 
 
 __all__ = [
-    *functions_to_create.keys(),
     "get_app_root_dir",
     "get_app_runtime_dir",
-    "from_env",
     "get_resolved_db_path",
     "get_default_llama_executable",
     "get_default_llama_model_path",

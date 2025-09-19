@@ -11,7 +11,7 @@ from crud import (
 )
 from db import get_session_manager
 from schemas.general import TokenPayload
-from utils import cfg, hashing, timing
+from utils import env, cfg, hashing, timing
 
 
 class AuthService:
@@ -19,7 +19,7 @@ class AuthService:
     def generate_access_token(payload: TokenPayload):
         return hashing.create_jwt(
             payload.model_dump(),
-            cfg.get_access_token_secret(),
+            env.ACCESS_TOKEN_SECRET,
             timing.get_utc_now(),
             cfg.get_access_token_dur_minutes(),
         )
@@ -28,7 +28,7 @@ class AuthService:
     def generate_refresh_token(payload: TokenPayload):
         return hashing.create_jwt(
             payload.model_dump(),
-            cfg.get_refresh_token_secret(),
+            env.REFRESH_TOKEN_SECRET,
             timing.get_utc_now(),
             cfg.get_refresh_token_dur_days(),
         )
@@ -37,11 +37,7 @@ class AuthService:
     def verify_token(token: str, variant: Literal["access", "refresh"]):
         return hashing.verify_jwt(
             token,
-            (
-                cfg.get_access_token_secret()
-                if variant == "access"
-                else cfg.get_refresh_token_secret()
-            ),
+            (env.ACCESS_TOKEN_SECRET if variant == "access" else env.REFRESH_TOKEN_SECRET),
         )
 
     @classmethod

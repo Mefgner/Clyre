@@ -1,5 +1,4 @@
 import logging
-import os
 import sys
 
 from fastapi import FastAPI
@@ -7,9 +6,9 @@ from fastapi import FastAPI
 from api.views import api_router
 from db import get_session_manager
 from pipelines import llama
-from utils import downloader, cfg
+from utils import downloader, env
 
-if cfg.get_debug_state():
+if env.DEBUG:
     LOGGING_LEVEL = logging.DEBUG
 else:
     LOGGING_LEVEL = logging.INFO
@@ -30,7 +29,7 @@ Logger.setLevel(logging.INFO)
 
 downloader.predownload("binaries.yaml", "models.yaml")
 
-app = FastAPI(title="Clyre API", version=os.getenv("CLYRE_VERSION"))
+app = FastAPI(title="Clyre API", version=env.CLYRE_VERSION)
 app.include_router(api_router, prefix="/api")
 
 app.add_event_handler("startup", get_session_manager().init_models)

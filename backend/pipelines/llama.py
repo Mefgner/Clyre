@@ -7,12 +7,12 @@ from subprocess import Popen
 
 import httpx
 
-from utils import cfg
+from utils import cfg, env
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
 
-LLAMA_URL = cfg.get_llama_url()
+LLAMA_URL = env.LLAMA_URL
 
 
 class LlamaLLMPipeline:
@@ -50,9 +50,9 @@ class LlamaLLMPipeline:
                     "--model",
                     self.__model_path,
                     "--host",
-                    cfg.get_llama_win_host(),
+                    env.LLAMA_WIN_HOST,
                     "--port",
-                    cfg.get_llama_win_port(),
+                    str(env.LLAMA_WIN_PORT),
                     "-ngl",
                     "-1",
                 ],

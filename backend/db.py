@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from models import Base
-from utils import cfg
+from utils import cfg, env
 
 Logger = logging.getLogger(__name__)
 
@@ -22,8 +22,8 @@ logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 class SessionManager:
     def __init__(self, echo: bool = False):
         Logger.info("Initializing database engine")
-        self._db_base = f"{cfg.get_db_engine()}+{cfg.get_db_runtime()}://"
-        if cfg.get_db_engine() == "sqlite":
+        self._db_base = f"{env.DB_ENGINE}+{env.DB_RUNTIME}://"
+        if env.DB_ENGINE == "sqlite":
             self._db_base += "/"
         self._db_url = f"{self._db_base}{cfg.get_resolved_db_path().as_posix()}"
         self._engine: AsyncEngine = create_async_engine(self._db_url, echo=echo, future=True)

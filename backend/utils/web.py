@@ -5,7 +5,7 @@ from fastapi.params import Header
 from fastapi.security import HTTPAuthorizationCredentials
 
 from schemas import general
-from utils import cfg, hashing, timing
+from utils import cfg, hashing, timing, env
 
 
 def extract_credentials(auth: Annotated[str, Header(alias="Authorization")]):
@@ -25,7 +25,7 @@ def extract_access_token(
     if token.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     try:
-        token_dict = hashing.verify_jwt(token.credentials, cfg.get_access_token_secret())
+        token_dict = hashing.verify_jwt(token.credentials, env.ACCESS_TOKEN_SECRET)
 
         created_at = timing.utc_from_timestamp(token_dict["timestamp"])
         expires_at = timing.offset_datetime(created_at, cfg.get_access_token_dur_minutes())
@@ -40,10 +40,10 @@ def extract_access_token(
 def extract_service_token(
     token: Annotated[HTTPAuthorizationCredentials, Depends(extract_credentials)],
 ) -> None:
-    if cfg.get_service_secret().lower() in ("forbidden", "forbiden", "", "none", None):
+    if env.SERVICE_SECRET.lower() in ("forbidden", "forbiden", "", "none", None):
 
         raise HTTPException(status_code=403, detail="Access using service token is forbidden")
     if not token.scheme.lower() == "service":
         raise HTTPException(status_code=403, detail="Invalid authorization header")
-    if not token.credentials == cfg.get_service_secret():
+    if not token.credentials == env.SERVICE_SECRET:
         raise HTTPException(status_code=403, detail="Invalid service token")

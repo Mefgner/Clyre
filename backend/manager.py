@@ -1,14 +1,14 @@
 import uvicorn
 
 from app import app
-from utils import cfg
+from utils import env
 
 
 def main():
     uvicorn.run(
         app,
-        host=cfg.get_host(),
-        port=int(cfg.get_port()),
+        host=env.HOST,
+        port=env.PORT,
         log_config={
             "version": 1,
             "disable_existing_loggers": False,
@@ -47,9 +47,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO: switch from "get from the env something" functions to PydanticSettings.
 # TODO: add streaming endpoint.
-# TODO: bring better error handling and raising. truncate traceback up to project's files excluding .venv modules.
 # TODO: a initial way to compress chat history.
 # TODO: make a queue for each user.
 # TODO: implement refresh token logic
