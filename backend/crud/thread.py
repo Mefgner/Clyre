@@ -6,7 +6,9 @@ from models import Thread
 from utils import hashing
 
 
-async def create_thread(session: AsyncSession, user_id: str, title: str = "New Thread") -> Thread:
+async def create_thread(
+    session: AsyncSession, user_id: str, title: str = "New Thread"
+) -> Thread:
     new_thread = Thread(id=hashing.generate_uuid(), user_id=user_id, title=title)
     session.add(new_thread)
     return new_thread
@@ -24,14 +26,18 @@ async def star_thread(session: AsyncSession, thread: Thread, star: bool) -> Thre
     return thread
 
 
-async def thread_to_project_connection(session: AsyncSession, thread: Thread, project_id: str | None) -> Thread:
+async def thread_to_project_connection(
+    session: AsyncSession, thread: Thread, project_id: str | None
+) -> Thread:
     thread.project_id = project_id
     thread.in_project = 1 if project_id else 0
     session.add(thread)
     return thread
 
 
-async def update_thread_time(session: AsyncSession, thread: Thread, utc_time: datetime.datetime | None) -> None:
+async def update_thread_time(
+    session: AsyncSession, thread: Thread, utc_time: datetime.datetime | None
+) -> None:
     if not utc_time:
         utc_time = datetime.datetime.now(datetime.UTC)
     thread.update_time = utc_time
@@ -42,5 +48,11 @@ async def get_thread_by_id(session: AsyncSession, thread_id: str) -> Thread | No
     return await session.get(Thread, thread_id)
 
 
-__all__ = ["create_thread", "rename_thread", "star_thread", "thread_to_project_connection", "update_thread_time",
-           "get_thread_by_id"]
+__all__ = [
+    "create_thread",
+    "get_thread_by_id",
+    "rename_thread",
+    "star_thread",
+    "thread_to_project_connection",
+    "update_thread_time",
+]

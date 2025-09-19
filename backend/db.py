@@ -1,17 +1,30 @@
+import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from models import Base
 from utils import cfg
 
+Logger = logging.getLogger(__name__)
+
+Logger.setLevel(logging.INFO)
+logging.getLogger("aiosqlite").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+
 
 class SessionManager:
     def __init__(self, echo: bool = False):
+        Logger.info("Initializing database engine")
         self._db_base = f"{cfg.get_db_engine()}+{cfg.get_db_runtime()}://"
-        if cfg.get_db_engine() == 'sqlite':
-            self._db_base += '/'
+        if cfg.get_db_engine() == "sqlite":
+            self._db_base += "/"
         self._db_url = f"{self._db_base}{cfg.get_resolved_db_path().as_posix()}"
         self._engine: AsyncEngine = create_async_engine(self._db_url, echo=echo, future=True)
         self._session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
@@ -23,6 +36,7 @@ class SessionManager:
 
     async def init_models(self):
         async with self._engine.begin() as conn:
+            Logger.info("Creating database tables")
             await conn.run_sync(Base.metadata.create_all)
 
     @property
@@ -33,8 +47,10 @@ class SessionManager:
     def session_maker(self) -> async_sessionmaker[AsyncSession]:
         return self._session_maker
 
+    @property
     @asynccontextmanager
-    async def get_session_context_manager(self) -> AsyncIterator[AsyncSession]:
+    async def context_manager(self) -> AsyncIterator[AsyncSession]:
+        Logger.debug("Creating database session")
         async with self._session_maker() as session:
             try:
                 yield session
@@ -45,12 +61,18 @@ class SessionManager:
             finally:
                 await session.close()
 
+    def __del__(self):
+        Logger.info("Shutting down database engine")
+        self._engine.sync_engine.dispose()
+
 
 sm_instance: SessionManager | None = None
 
 
 def get_session_manager() -> SessionManager:
+    Logger.debug("Getting session manager")
     global sm_instance
     if not sm_instance:
+        Logger.debug("Creating new session manager")
         sm_instance = SessionManager()
     return sm_instance

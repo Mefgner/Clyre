@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import subprocess
-import time
 from pathlib import Path
 from subprocess import Popen
 
@@ -10,35 +9,63 @@ import httpx
 
 from utils import cfg
 
+Logger = logging.getLogger(__name__)
+Logger.setLevel(logging.INFO)
+
 LLAMA_URL = cfg.get_llama_url()
 
 
 class LlamaLLMPipeline:
     is_running = False
     __process: Popen | None = None
-    current_model: str | None = None
+    __current_model: str | None = None
 
-    def __init__(self, model_name: str, model_path: str | Path, executable_path: os.PathLike,
-                 is_in_docker: bool = False):
-        self.current_model = self.__model_name = model_name
+    def __init__(
+        self,
+        llama_url: str,
+        model_name: str,
+        model_path: str | Path,
+        executable_path: os.PathLike,
+        is_in_docker: bool = False,
+    ):
+        Logger.info("Initializing LlamaLLMPipeline")
+        self.__llama_url = llama_url
+        self.__current_model = self.__model_name = model_name
         self.__model_path = model_path
         self.__executable_path = executable_path
         self.__is_in_docker = is_in_docker
 
         self._startup()
 
+    @property
+    def current_model(self):
+        return self.__current_model
+
     def _startup(self):
         if not self.__is_in_docker:
-            self.__process = subprocess.Popen([
-                self.__executable_path, '--model', self.__model_path, '--host', cfg.get_llama_win_host(), '--port',
-                cfg.get_llama_win_port(), '-ngl', '100'
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            Logger.info("Starting Llama.cpp executable")
+            self.__process = subprocess.Popen(
+                [
+                    self.__executable_path,
+                    "--model",
+                    self.__model_path,
+                    "--host",
+                    cfg.get_llama_win_host(),
+                    "--port",
+                    cfg.get_llama_win_port(),
+                    "-ngl",
+                    "-1",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
+            )
 
         self.is_running = True
 
     @staticmethod
     async def wait_for_startup():
         async with httpx.AsyncClient(timeout=10) as client:
+            Logger.info("Waiting for Llama.cpp to ready to process requests")
             while True:
                 try:
                     (await client.get(f"{LLAMA_URL}/health", timeout=10)).raise_for_status()
@@ -46,19 +73,29 @@ class LlamaLLMPipeline:
                 except httpx.HTTPStatusError:
                     await asyncio.sleep(2)
 
-    def _build_payload(self, history: list[dict[str, str]], max_tokens: int, temperature: float, stream: bool):
+    def _build_payload(
+        self,
+        history: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        stream: bool,
+    ):
         return {
             "model": self.__model_name,
             "messages": history,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "stream": stream
+            "stream": stream,
         }
 
-    async def chat_completion_stream(self, history: list[dict[str, str]], max_tokens: int = 512,
-                                     temperature: float = 0.7):
+    async def chat_completion_stream(
+        self,
+        history: list[dict[str, str]],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ):
         payload = self._build_payload(history, max_tokens, temperature, stream=True)
-        link = f"{LLAMA_URL}/v1/chat/completions"
+        link = f"{self.__llama_url}/v1/chat/completions"
         async with httpx.AsyncClient(timeout=100.0) as client:
             async with client.stream("POST", link, json=payload) as response:
                 response.raise_for_status()
@@ -66,18 +103,23 @@ class LlamaLLMPipeline:
                     if line:
                         yield line
 
-    async def chat_completion_sync(self, history: list[dict[str, str]], max_tokens: int = 512,
-                                   temperature: float = 0.7):
+    async def chat_completion_sync(
+        self,
+        history: list[dict[str, str]],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ):
         payload = self._build_payload(history, max_tokens, temperature, stream=False)
-        link = f"{LLAMA_URL}/v1/chat/completions"
+        link = f"{self.__llama_url}/v1/chat/completions"
         async with httpx.AsyncClient(timeout=100.0) as client:
             response = await client.post(link, json=payload)
             response.raise_for_status()
             json = response.json()
-            logging.info(f"LLama response: \\ \n\t{json['id']}\n\t{json['usage']}")
+            Logger.info("LLama response:\n\t%s\n\t%s", json["id"], json["usage"])
             return json
 
     def __del__(self):
+        Logger.info("Shutting down Llama.cpp executable")
         if self.__process:
             self.__process.terminate()
             self.__process.wait()
@@ -88,21 +130,31 @@ class LlamaLLMPipeline:
 llama_instance: LlamaLLMPipeline | None = None
 
 
-def get_llama_pipeline(model_name: str | None = None, executable_path: Path | None = None,
-                       is_in_docker: bool = False) -> LlamaLLMPipeline:
+def get_llama_pipeline(
+    model_name: str | None = None,
+    executable_path: Path | None = None,
+    is_in_docker: bool = False,
+) -> LlamaLLMPipeline:
     if not model_name:
         model_name = cfg.get_default_llama_model_name()
     if not executable_path:
         executable_path = cfg.get_default_llama_executable()
+
+    setup_payload = (
+        LLAMA_URL,
+        model_name,
+        cfg.resolve_llama_model_path(model_name),
+        executable_path,
+        is_in_docker,
+    )
+
     global llama_instance
 
     if not llama_instance:
-        llama_instance = LlamaLLMPipeline(model_name, cfg.resolve_llama_model_path(model_name), executable_path,
-                                          is_in_docker)
+        llama_instance = LlamaLLMPipeline(*setup_payload)
 
     if llama_instance.current_model != model_name:
         del llama_instance
-        llama_instance = LlamaLLMPipeline(model_name, cfg.resolve_llama_model_path(model_name), executable_path,
-                                          is_in_docker)
+        llama_instance = LlamaLLMPipeline(*setup_payload)
 
     return llama_instance

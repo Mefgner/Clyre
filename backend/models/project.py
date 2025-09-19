@@ -1,4 +1,4 @@
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import mapped_column, relationship
 
 from . import Base
@@ -13,7 +13,9 @@ class Project(Base):
     user = relationship("User", back_populates="projects")
     threads = relationship("Thread", back_populates="project", cascade="all, delete-orphan")
 
-    file_links = relationship("FileHasProject", back_populates="project", cascade="all, delete-orphan")
+    file_links = relationship(
+        "FileHasProject", back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 __all__ = ["Project"]

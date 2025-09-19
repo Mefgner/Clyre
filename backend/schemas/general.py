@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, UUID4
+from pydantic import UUID4, BaseModel
 
 
 class TokenPayload(BaseModel):

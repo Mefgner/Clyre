@@ -1,20 +1,27 @@
-from . import Base
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import mapped_column, relationship
+
+from . import Base
 
 
 class User(Base):
     __tablename__ = "user"
 
-    local_connections = relationship("LocalConnection", back_populates="user", cascade="all, delete-orphan")
-    telegram_connections = relationship("TelegramConnection", back_populates="user", cascade="all, delete-orphan")
+    local_connections = relationship(
+        "LocalConnection", back_populates="user", cascade="all, delete-orphan"
+    )
+    telegram_connections = relationship(
+        "TelegramConnection", back_populates="user", cascade="all, delete-orphan"
+    )
 
     files = relationship("File", back_populates="user", cascade="all, delete-orphan")
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
     threads = relationship("Thread", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
 
-    user_roles = relationship("RoleHasUser", back_populates="user", cascade="all, delete-orphan")
+    user_roles = relationship(
+        "RoleHasUser", back_populates="user", cascade="all, delete-orphan"
+    )
     roles = relationship("Role", secondary="role_has_user", back_populates="users")
 
 
@@ -39,4 +46,4 @@ class TelegramConnection(Base):
     user = relationship("User", back_populates="telegram_connections")
 
 
-__all__ = ["User", "LocalConnection", "TelegramConnection"]
+__all__ = ["LocalConnection", "TelegramConnection", "User"]
