@@ -10,8 +10,9 @@ from schemas.auth import (
     UserLoginRequest,
     UserRegisterRequest,
 )
+from schemas.general import TokenPayload
 from services.auth import AuthService
-from utils.web import extract_service_token
+from utils import web
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
@@ -54,14 +55,21 @@ async def logout(response: Response):
     return {"message": "Successfully logged out"}
 
 
-# @auth_router.post("/refresh")
-# async def refresh_access(response: Response): ...
+@auth_router.post("/refresh")
+async def refresh_access(
+    response: Response,
+    refresh_payload: Annotated[TokenPayload, Depends(web.extract_refresh_token)],
+):
+    Logger.info("Processing refresh request")
+    access, refresh = await auth_sc.refresh_token(refresh_payload)
+    response.set_cookie("refresh_token", refresh.token, expires=refresh.expires, httponly=True)
+    return access
 
 
 @auth_router.post("/telegram-register")
 async def telegram_register(
     request: TelegramRegistrationRequest,
-    _: Annotated[NoneType, Depends(extract_service_token)],
+    _: Annotated[NoneType, Depends(web.extract_service_token)],
 ):
     try:
         Logger.info("Processing telegram registration request from %s", request.user_id)

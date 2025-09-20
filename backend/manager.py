@@ -50,4 +50,3 @@ if __name__ == "__main__":
 # TODO: add streaming endpoint.
 # TODO: a initial way to compress chat history.
 # TODO: make a queue for each user.
-# TODO: implement refresh token logic

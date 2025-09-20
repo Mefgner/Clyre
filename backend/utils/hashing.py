@@ -1,10 +1,12 @@
 import hashlib
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import argon2
 import jwt
 from pydantic import BaseModel
+
+from utils import timing
 
 ph = argon2.PasswordHasher()
 
@@ -37,13 +39,13 @@ def generate_uuid() -> str:
 def create_jwt(
     payload: dict[str, str], secret: str, from_: datetime, timespan: timedelta
 ) -> JWTToken:
-    expires = (from_ + timespan).now(UTC)
+    expires = timing.offset_datetime(from_, timespan)
     tk = JWTToken(
         token=jwt.encode(
             payload,
             secret,
             algorithm="HS256",
-            headers={"exp": str((from_ + timespan).now(UTC))},
+            headers={"exp": str(expires)},
         ),
         expires=expires,
     )

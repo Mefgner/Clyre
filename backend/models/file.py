@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import Date, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import mapped_column, relationship
 
-from . import Base
+from models import Base
 
 WORKDIR = Path(os.getenv("WORKDIR", ".")).resolve()
 

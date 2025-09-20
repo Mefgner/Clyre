@@ -1,10 +1,17 @@
 from collections.abc import Iterable
 
-from crud import create_message, create_thread, get_messages_in_thread
+from crud import (
+    create_message,
+    create_thread,
+    get_messages_in_thread,
+    get_thread_by_id,
+    update_thread_time,
+)
 from crud.message import get_last_message_order_in_thread
 from db import get_session_manager
-from models import Message
+from models import Message, Thread
 from pipelines.llama import get_llama_pipeline
+from utils import timing
 
 
 class ChattingService:
@@ -12,6 +19,7 @@ class ChattingService:
     async def send_message(
         user_id: str, message: str, thread_id: str | None = None
     ) -> tuple[str, str]:
+        thread: Thread | None = None
         sm = get_session_manager()
         async with sm.context_manager as session:
             if not thread_id:
@@ -22,6 +30,10 @@ class ChattingService:
                 last_order = await get_last_message_order_in_thread(
                     session, thread_id=thread_id, user_id=user_id
                 )
+
+            if not thread:
+                thread = await get_thread_by_id(session, thread_id)
+            await update_thread_time(session, thread, timing.get_utc_now())
 
             new_message = await create_message(
                 session,
@@ -50,6 +62,9 @@ class ChattingService:
             messages = await get_messages_in_thread(session, thread_id, user_id)
             if not messages:
                 raise ValueError("Message not found")
+
+            thread = await get_thread_by_id(session, thread_id)
+            await update_thread_time(session, thread, timing.get_utc_now())
 
             history = self.build_history(messages)
             response_data = await llama.chat_completion_sync(history)

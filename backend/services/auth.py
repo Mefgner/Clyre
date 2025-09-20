@@ -1,5 +1,3 @@
-from typing import Literal
-
 from crud import (
     create_local_connection,
     create_telegram_connection,
@@ -11,10 +9,15 @@ from crud import (
 )
 from db import get_session_manager
 from schemas.general import TokenPayload
-from utils import env, cfg, hashing, timing
+from utils import cfg, env, hashing, timing
 
 
 class AuthService:
+    @staticmethod
+    def build_payload(user_id: str, timestamp: int = -1):
+        timestamp = timestamp if timestamp != -1 else timing.get_current_timestamp()
+        return TokenPayload(user_id=user_id, timestamp=timestamp)
+
     @staticmethod
     def generate_access_token(payload: TokenPayload):
         return hashing.create_jwt(
@@ -33,23 +36,9 @@ class AuthService:
             cfg.get_refresh_token_dur_days(),
         )
 
-    @staticmethod
-    def verify_token(token: str, variant: Literal["access", "refresh"]):
-        return hashing.verify_jwt(
-            token,
-            (env.ACCESS_TOKEN_SECRET if variant == "access" else env.REFRESH_TOKEN_SECRET),
-        )
-
-    @classmethod
-    async def refresh_token(cls, refresh_token: str):
-        payload = cls.verify_token(refresh_token, "refresh")
+    async def refresh_token(self, payload: TokenPayload):
         payload.timestamp = timing.get_current_timestamp()
-        return cls.generate_access_token(TokenPayload(**payload))
-
-    @staticmethod
-    def build_payload(user_id: str, timestamp: int = -1):
-        timestamp = timestamp if timestamp != -1 else timing.get_current_timestamp()
-        return TokenPayload(user_id=user_id, timestamp=timestamp)
+        return self.generate_access_token(payload), self.generate_refresh_token(payload)
 
     async def register_locally(
         self, name: str, password: str, email: str, user_id: str | None = None

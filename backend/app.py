@@ -23,9 +23,6 @@ handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
 Logger.addHandler(handler)
 
 logging.getLogger("httpcore").setLevel(logging.WARNING)
-Logger = logging.getLogger(__name__)
-
-Logger.setLevel(logging.INFO)
 
 downloader.predownload("binaries.yaml", "models.yaml")
 
@@ -40,8 +37,7 @@ def shutdown():
     Logger.info("Shutting down")
     llama_instance = llama.get_llama_pipeline()
     session_manager = get_session_manager()
-    del llama_instance
-    del session_manager
+    del llama_instance, session_manager
 
 
 app.add_event_handler("shutdown", shutdown)
