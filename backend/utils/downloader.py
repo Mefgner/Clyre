@@ -5,6 +5,7 @@ from pathlib import Path
 import pooch
 import yaml
 
+import utils.base
 from utils import cfg
 
 
@@ -64,7 +65,9 @@ def predownload(*files: str) -> list[str]:
     all_downloads = []
 
     for config_file in files:
-        with open(cfg.get_app_root_dir() / "configs" / config_file, encoding="utf-8") as file:
+        with open(
+            utils.base.get_app_root_dir() / "configs" / config_file, encoding="utf-8"
+        ) as file:
             files_to_download: list[dict[str, str]] = yaml.load(
                 file.read(), Loader=yaml.FullLoader
             )

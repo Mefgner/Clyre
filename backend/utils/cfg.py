@@ -8,7 +8,8 @@ from pathlib import Path
 
 import yaml
 
-from utils import env, get_app_root_dir
+from utils import env
+from utils.base import get_app_root_dir
 
 Logger = logging.getLogger(__name__)
 config_cache = {}

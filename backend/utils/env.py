@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from utils import get_app_root_dir
+from utils.base import get_app_root_dir
 
 
 def env_file():
