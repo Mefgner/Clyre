@@ -8,7 +8,6 @@ import yaml
 import utils.base
 from utils import cfg
 
-
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
 
@@ -35,8 +34,6 @@ def _download_from_config(item_to_download: dict[str, str]) -> str:
     filename = item_to_download["filename"]
     folder = item_to_download.get("folder")
 
-    Logger.info("Downloading %s...", shorter_path_repr(url))
-
     if folder:
         folder = cfg.get_app_runtime_dir() / dest_subdir / sha256 / folder
         Logger.info("Checking if folder %s exists", shorter_path_repr(folder))
@@ -52,6 +49,8 @@ def _download_from_config(item_to_download: dict[str, str]) -> str:
     if file_path.exists():
         Logger.info("File %s already exists, skipping download", shorter_path_repr(file_path))
         return str(file_path)
+
+    Logger.info("Downloading %s...", shorter_path_repr(url))
 
     return pooch.retrieve(
         url,

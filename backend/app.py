@@ -24,11 +24,10 @@ Logger.addHandler(handler)
 
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-downloader.predownload("binaries.yaml", "models.yaml")
-
 app = FastAPI(title="Clyre API", version=env.CLYRE_VERSION)
 app.include_router(api_router, prefix="/api")
 
+app.add_event_handler("startup", lambda: downloader.predownload("binaries.yaml", "models.yaml"))
 app.add_event_handler("startup", get_session_manager().init_models)
 app.add_event_handler("startup", llama.get_llama_pipeline().wait_for_startup)
 

@@ -36,7 +36,6 @@ async def chat_response(
     return {
         "response": response.inline_value,
         "thread_id": thread_id,
-        "message_id": message_id,
     }
 
 
@@ -71,7 +70,7 @@ async def telegram_response(
             detail="User not found. Please register first or login with your Telegram account.",
         ) from exc
     Logger.info(
-        "chat_response request from %s to thread %s",
+        "chat_response (telegram) request from %s to thread %s",
         user_id,
         request.thread_id or "(Create new thread)",
     )
@@ -79,8 +78,28 @@ async def telegram_response(
         user_id, request.message, request.thread_id
     )
     response = await chatting_sc.generate_llm_response(thread_id, user_id)
-    return {
-        "response": response.inline_value,
-        "thread_id": thread_id,
-        "message_id": message_id,
-    }
+    return {"response": response.inline_value, "thread_id": thread_id}
+
+
+@chat_router.post("/telegram-stream")
+async def telegram_stream(
+    request: TelegramBotChatRequest,
+    _: Annotated[None, Depends(web.extract_service_token)],
+):
+    try:
+        user_id = await connection_sc.user_from_telegram(
+            request.telegram_user_id, request.telegram_chat_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            404,
+            detail="User not found. Please register first or login with your Telegram account.",
+        ) from exc
+    Logger.info(
+        "chat_stream (telegram) request from %s to thread %s",
+        user_id,
+        request.thread_id or "(Create new thread)",
+    )
+    _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
+    response = chatting_sc.stream_response(thread_id, user_id)
+    return StreamingResponse(response, media_type="text/event-stream")
