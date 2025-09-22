@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Depends
+from starlette.responses import StreamingResponse
 
 from schemas.chatting import TelegramBotChatRequest, UserChatRequest
 from schemas.general import TokenPayload
@@ -22,7 +23,6 @@ async def chat_response(
     request: UserChatRequest,
     token_payload: Annotated[TokenPayload, Depends(web.extract_access_token)],
 ):
-
     Logger.info(
         "chat_response request from %s to thread %s",
         token_payload.user_id,
@@ -38,6 +38,22 @@ async def chat_response(
         "thread_id": thread_id,
         "message_id": message_id,
     }
+
+
+@chat_router.post("/stream")
+async def stream_response(
+    request: UserChatRequest,
+    token_payload: Annotated[TokenPayload, Depends(web.extract_access_token)],
+):
+    Logger.info(
+        "chat_response request from %s to thread %s",
+        token_payload.user_id,
+        request.thread_id or "(Create new thread)",
+    )
+    user_id = token_payload.user_id
+    _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
+    response = chatting_sc.stream_response(thread_id, user_id)
+    return StreamingResponse(response, media_type="text/event-stream")
 
 
 @chat_router.post("/telegram-response")

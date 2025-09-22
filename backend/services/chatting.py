@@ -1,4 +1,5 @@
-from collections.abc import Iterable
+import json
+from collections.abc import Iterable, AsyncGenerator
 
 from crud import (
     create_message,
@@ -77,3 +78,41 @@ class ChattingService:
                 order=await get_last_message_order_in_thread(session, thread_id, user_id) + 1,
             )
         return response_message
+
+    async def stream_response(
+        self, thread_id: str, user_id: str, model: str = ""
+    ) -> AsyncGenerator[str, None]:
+        llama = get_llama_pipeline(model)
+        sm = get_session_manager()
+
+        async with sm.context_manager as session:
+            messages = await get_messages_in_thread(session, thread_id, user_id)
+            if not messages:
+                raise ValueError("Message not found")
+
+            thread = await get_thread_by_id(session, thread_id)
+            await update_thread_time(session, thread, timing.get_utc_now())
+
+            history = self.build_history(messages)
+            response: str = ""
+            async for token in llama.chat_completion_stream(history):
+                response += token
+                yield json.dumps({"token": token})
+
+            response_message = await create_message(
+                session,
+                user_id=user_id,
+                thread_id=thread_id,
+                role="assistant",
+                content=response,
+                order=await get_last_message_order_in_thread(session, thread_id, user_id) + 1,
+            )
+
+            yield json.dumps(
+                {
+                    "token": None,
+                    "done": True,
+                    "thread_id": thread_id,
+                    "message_id": response_message.id,
+                }
+            )

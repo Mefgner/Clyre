@@ -1,9 +1,11 @@
 import asyncio
+import json
 import logging
 import os
 import subprocess
 from pathlib import Path
 from subprocess import Popen
+from typing import Any, AsyncGenerator
 
 import httpx
 
@@ -88,21 +90,6 @@ class LlamaLLMPipeline:
             "stream": stream,
         }
 
-    async def chat_completion_stream(
-        self,
-        history: list[dict[str, str]],
-        max_tokens: int = 512,
-        temperature: float = 0.7,
-    ):
-        payload = self._build_payload(history, max_tokens, temperature, stream=True)
-        link = f"{self.__llama_url}/v1/chat/completions"
-        async with httpx.AsyncClient(timeout=100.0) as client:
-            async with client.stream("POST", link, json=payload) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line:
-                        yield line
-
     async def chat_completion_sync(
         self,
         history: list[dict[str, str]],
@@ -114,9 +101,52 @@ class LlamaLLMPipeline:
         async with httpx.AsyncClient(timeout=100.0) as client:
             response = await client.post(link, json=payload)
             response.raise_for_status()
-            json = response.json()
-            Logger.info("LLama response:\n\t%s\n\t%s", json["id"], json["usage"])
-            return json
+            response_json = response.json()
+            Logger.info(
+                "LLama response:\n\t%s\n\t%s\n\t%s",
+                response_json["id"],
+                response_json["usage"],
+                response_json["timings"],
+            )
+            return response_json
+
+    async def chat_completion_stream(
+        self,
+        history: list[dict[str, str]],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ) -> AsyncGenerator[str, None]:
+        payload = self._build_payload(history, max_tokens, temperature, stream=True)
+        link = f"{self.__llama_url}/v1/chat/completions"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream("POST", link, json=payload) as stream:
+                async for line in stream.aiter_lines():
+                    try:
+                        formated_chunk = line.split("data: ")[-1].strip()
+                        if not formated_chunk or formated_chunk == "[DONE]":
+                            continue
+
+                        chunk_json: dict[str, Any] = json.loads(formated_chunk)
+
+                        if len(chunk_json.get("choices", ())) <= 0:
+                            if not chunk_json.get("usage") or not chunk_json.get("timings"):
+                                continue
+                            Logger.info(
+                                "LLama response:\n\t%s\n\t%s\n\t%s",
+                                chunk_json["id"],
+                                chunk_json["usage"],
+                                chunk_json["timings"],
+                            )
+                            continue
+
+                        token: str | None = chunk_json["choices"][0]["delta"].get("content")
+                        if not token:
+                            continue
+
+                        yield token
+                    except json.JSONDecodeError:
+                        Logger.error("Failed to decode JSON from Llama.cpp response (%s)", line)
+                        continue
 
     def __del__(self):
         Logger.info("Shutting down Llama.cpp executable")
