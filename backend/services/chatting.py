@@ -1,5 +1,6 @@
 import json
-from collections.abc import Iterable, AsyncGenerator
+import logging
+from collections.abc import AsyncGenerator, Iterable
 
 from crud import (
     create_message,
@@ -13,6 +14,9 @@ from db import get_session_manager
 from models import Message, Thread
 from pipelines.llama import get_llama_pipeline
 from utils import timing
+
+Logger = logging.getLogger(__name__)
+Logger.setLevel(logging.INFO)
 
 
 class ChattingService:
@@ -97,7 +101,7 @@ class ChattingService:
             response: str = ""
             async for token in llama.chat_completion_stream(history):
                 response += token
-                yield json.dumps({"token": token})
+                yield json.dumps({"token": token}) + "\n"
 
             response_message = await create_message(
                 session,

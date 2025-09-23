@@ -51,8 +51,9 @@ async def stream_response(
     )
     user_id = token_payload.user_id
     _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
-    response = chatting_sc.stream_response(thread_id, user_id)
-    return StreamingResponse(response, media_type="text/event-stream")
+    return StreamingResponse(
+        aiter(chatting_sc.stream_response(thread_id, user_id)), media_type="text/plain"
+    )
 
 
 @chat_router.post("/telegram-response")
@@ -101,5 +102,6 @@ async def telegram_stream(
         request.thread_id or "(Create new thread)",
     )
     _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
-    response = chatting_sc.stream_response(thread_id, user_id)
-    return StreamingResponse(response, media_type="text/event-stream")
+    return StreamingResponse(
+        chatting_sc.stream_response(thread_id, user_id), media_type="text/plain"
+    )

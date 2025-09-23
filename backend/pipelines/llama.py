@@ -123,8 +123,11 @@ class LlamaLLMPipeline:
                 async for line in stream.aiter_lines():
                     try:
                         formated_chunk = line.split("data: ")[-1].strip()
-                        if not formated_chunk or formated_chunk == "[DONE]":
+                        if not formated_chunk:
                             continue
+
+                        if formated_chunk == "[DONE]":
+                            break
 
                         chunk_json: dict[str, Any] = json.loads(formated_chunk)
 
