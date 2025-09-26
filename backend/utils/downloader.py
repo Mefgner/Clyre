@@ -52,12 +52,10 @@ def _download_from_config(item_to_download: dict[str, str]) -> str:
 
     Logger.info("Downloading %s...", shorter_path_repr(url))
 
-    download_path = cfg.get_app_runtime_dir() / dest_subdir / sha256
-
     return pooch.retrieve(
         url,
         sha256,
-        str(download_path),
+        str(file_path),
         processor=(pooch.Unzip(extract_dir=folder) if filename.endswith(".zip") else None),
     )
 
