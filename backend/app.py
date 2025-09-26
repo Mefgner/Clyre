@@ -3,39 +3,42 @@ import sys
 
 from fastapi import FastAPI
 
-from api.views import api_router
-from db import get_session_manager
+import db
+from api import views
 from pipelines import llama
-from utils import downloader, env
+from utils import cfg, downloader, env
 
-if env.DEBUG:
-    LOGGING_LEVEL = logging.DEBUG
-else:
-    LOGGING_LEVEL = logging.INFO
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+logging.getLogger("aiosqlite").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 Logger = logging.getLogger()
 Logger.handlers.clear()
 
 handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(LOGGING_LEVEL)
-handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+handler.setLevel(cfg.get_logging_level())
+handler.setFormatter(
+    logging.Formatter(
+        fmt="%(asctime)s - %(levelname)s - %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
+)
 
 Logger.addHandler(handler)
 
-logging.getLogger("httpcore").setLevel(logging.WARNING)
+downloader.predownload("binaries.yaml", "models.yaml")
 
 app = FastAPI(title="Clyre API", version=env.CLYRE_VERSION)
-app.include_router(api_router, prefix="/api")
+app.include_router(views.api_router, prefix="/api")
 
-app.add_event_handler("startup", lambda: downloader.predownload("binaries.yaml", "models.yaml"))
-app.add_event_handler("startup", get_session_manager().init_models)
+app.add_event_handler("startup", db.get_session_manager().init_models)
 app.add_event_handler("startup", llama.get_llama_pipeline().wait_for_startup)
 
 
 def shutdown():
     Logger.info("Shutting down")
     llama_instance = llama.get_llama_pipeline()
-    session_manager = get_session_manager()
+    session_manager = db.get_session_manager()
     del llama_instance, session_manager
 
 

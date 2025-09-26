@@ -16,6 +16,10 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO: add streaming endpoint.
+# TODO: extract general code from view.
+# TODO: refactor service function to make them more simple and less god-like.
+
 # TODO: a initial way to compress chat history.
+
+# TODO: try to make less abstractions while generating completion.
 # TODO: make a queue for each user.

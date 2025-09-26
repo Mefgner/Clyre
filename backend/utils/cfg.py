@@ -12,7 +12,6 @@ from utils import env
 from utils.base import get_app_root_dir
 
 Logger = logging.getLogger(__name__)
-config_cache = {}
 
 
 def dict_from_yaml(absolute_file_path: Path) -> dict:
@@ -34,7 +33,7 @@ def get_app_runtime_dir() -> Path:
             workdir = Path(os.path.expanduser(os.path.expandvars(p["workdir"]))).resolve()
             Logger.debug("platform path: %s", workdir)
             workdir.mkdir(parents=True, exist_ok=True)
-            return workdir
+            return workdir.resolve()
     raise ValueError("Platform not found")
 
 
@@ -121,6 +120,11 @@ def get_refresh_token_dur_days() -> datetime.timedelta:
     return datetime.timedelta(days=int(env.REFRESH_TOKEN_DUR_DAYS))
 
 
+@lru_cache(maxsize=1)
+def get_logging_level() -> int:
+    return logging.DEBUG if env.DEBUG else logging.INFO
+
+
 __all__ = [
     "get_app_root_dir",
     "get_app_runtime_dir",
@@ -131,4 +135,5 @@ __all__ = [
     "get_default_llama_model_name",
     "get_access_token_dur_minutes",
     "get_refresh_token_dur_days",
+    "get_logging_level",
 ]

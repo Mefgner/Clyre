@@ -29,9 +29,7 @@ async def chat_response(
         request.thread_id or "(Create new thread)",
     )
     user_id = token_payload.user_id
-    message_id, thread_id = await chatting_sc.send_message(
-        user_id, request.message, request.thread_id
-    )
+    _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
     response = await chatting_sc.generate_llm_response(thread_id, user_id)
     return {
         "response": response.inline_value,
@@ -52,7 +50,7 @@ async def stream_response(
     user_id = token_payload.user_id
     _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
     return StreamingResponse(
-        aiter(chatting_sc.stream_response(thread_id, user_id)), media_type="text/plain"
+        aiter(chatting_sc.stream_response(thread_id, user_id)), media_type="text/event-stream"
     )
 
 
@@ -75,9 +73,7 @@ async def telegram_response(
         user_id,
         request.thread_id or "(Create new thread)",
     )
-    message_id, thread_id = await chatting_sc.send_message(
-        user_id, request.message, request.thread_id
-    )
+    _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
     response = await chatting_sc.generate_llm_response(thread_id, user_id)
     return {"response": response.inline_value, "thread_id": thread_id}
 
@@ -103,5 +99,5 @@ async def telegram_stream(
     )
     _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
     return StreamingResponse(
-        chatting_sc.stream_response(thread_id, user_id), media_type="text/plain"
+        chatting_sc.stream_response(thread_id, user_id), media_type="text/event-stream"
     )

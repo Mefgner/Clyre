@@ -35,11 +35,11 @@ def _download_from_config(item_to_download: dict[str, str]) -> str:
     folder = item_to_download.get("folder")
 
     if folder:
-        folder = cfg.get_app_runtime_dir() / dest_subdir / sha256 / folder
-        Logger.info("Checking if folder %s exists", shorter_path_repr(folder))
-        if folder.exists():
+        folder_path = cfg.get_app_runtime_dir() / dest_subdir / sha256 / folder
+        Logger.info("Checking if folder %s exists", shorter_path_repr(folder_path))
+        if folder_path.exists():
             Logger.info(
-                "Folder %s already exists, skipping download", shorter_path_repr(folder)
+                "Folder %s already exists, skipping download", shorter_path_repr(folder_path)
             )
             return str(folder)
 
@@ -52,10 +52,12 @@ def _download_from_config(item_to_download: dict[str, str]) -> str:
 
     Logger.info("Downloading %s...", shorter_path_repr(url))
 
+    download_path = cfg.get_app_runtime_dir() / dest_subdir / sha256
+
     return pooch.retrieve(
         url,
         sha256,
-        str(file_path),
+        str(download_path),
         processor=(pooch.Unzip(extract_dir=folder) if filename.endswith(".zip") else None),
     )
 

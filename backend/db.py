@@ -13,10 +13,7 @@ from models import Base
 from utils import cfg, env
 
 Logger = logging.getLogger(__name__)
-
 Logger.setLevel(logging.INFO)
-logging.getLogger("aiosqlite").setLevel(logging.WARNING)
-logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 
 class SessionManager:
