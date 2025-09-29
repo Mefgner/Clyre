@@ -58,9 +58,9 @@ class SessionManager:
             finally:
                 await session.close()
 
-    def __del__(self):
-        Logger.info("Shutting down database engine")
-        self._engine.sync_engine.dispose()
+    async def close(self):
+        Logger.info("Closing database engine")
+        await self._engine.dispose()
 
 
 sm_instance: SessionManager | None = None

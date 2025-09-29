@@ -56,7 +56,7 @@ class LlamaLLMPipeline:
                     "--port",
                     str(env.LLAMA_WIN_PORT),
                     "-ngl",
-                    "-1",
+                    "40",
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.STDOUT,
@@ -122,7 +122,7 @@ class LlamaLLMPipeline:
             async with client.stream("POST", link, json=payload) as stream:
                 async for line in stream.aiter_lines():
                     try:
-                        formated_chunk = line.split("data: ")[-1].strip()
+                        formated_chunk = line[6:].strip()
                         if not formated_chunk:
                             continue
 
@@ -151,13 +151,16 @@ class LlamaLLMPipeline:
                         Logger.error("Failed to decode JSON from Llama.cpp response (%s)", line)
                         continue
 
-    def __del__(self):
+    def close(self):
         Logger.info("Shutting down Llama.cpp executable")
         if self.__process:
             self.__process.terminate()
             self.__process.wait()
             self.is_running = False
             self.__process = None
+
+    def __del__(self):
+        self.close()
 
 
 llama_instance: LlamaLLMPipeline | None = None
@@ -191,3 +194,7 @@ def get_llama_pipeline(
         llama_instance = LlamaLLMPipeline(*setup_payload)
 
     return llama_instance
+
+
+def get_current_llama_pipeline() -> LlamaLLMPipeline:
+    return llama_instance or get_llama_pipeline()

@@ -32,14 +32,6 @@ app = FastAPI(title="Clyre API", version=env.CLYRE_VERSION)
 app.include_router(views.api_router, prefix="/api")
 
 app.add_event_handler("startup", db.get_session_manager().init_models)
-app.add_event_handler("startup", llama.get_llama_pipeline().wait_for_startup)
-
-
-def shutdown():
-    Logger.info("Shutting down")
-    llama_instance = llama.get_llama_pipeline()
-    session_manager = db.get_session_manager()
-    del llama_instance, session_manager
-
-
-app.add_event_handler("shutdown", shutdown)
+app.add_event_handler("startup", llama.get_current_llama_pipeline().wait_for_startup)
+app.add_event_handler("shutdown", db.get_session_manager().close)
+app.add_event_handler("shutdown", llama.get_current_llama_pipeline().close)

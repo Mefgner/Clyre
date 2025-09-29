@@ -50,7 +50,7 @@ async def stream_response(
     user_id = token_payload.user_id
     _, thread_id = await chatting_sc.send_message(user_id, request.message, request.thread_id)
     return StreamingResponse(
-        aiter(chatting_sc.stream_response(thread_id, user_id)), media_type="text/event-stream"
+        chatting_sc.stream_response(thread_id, user_id), media_type="text/event-stream"
     )
 
 
