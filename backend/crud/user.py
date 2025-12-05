@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import LocalConnection, TelegramConnection, User
+from models import LocalConnection, TelegramConnection, User, RoleHasUser, Role
 from utils import hashing
 
 
@@ -51,6 +51,29 @@ async def get_local_conn_by_email(session: AsyncSession, email: str) -> LocalCon
     return conn.scalars().first()
 
 
+async def get_public_local_conn_by_email(
+    session: AsyncSession, email: str
+) -> LocalConnection | None:
+    conn = await session.execute(
+        select(LocalConnection.email, LocalConnection.id, LocalConnection.name).where(
+            LocalConnection.email == email
+        )
+    )
+    return conn.scalars().first()
+
+
+async def get_public_local_conn_by_user_id(
+    session: AsyncSession, user_id: str
+) -> LocalConnection | None:
+    conn = await session.execute(
+        select(LocalConnection.id, LocalConnection.email, LocalConnection.name, Role.name)
+        .where(LocalConnection.user_id == user_id)
+        .join(RoleHasUser, LocalConnection.user_id == RoleHasUser.user_id)
+        .join(Role, RoleHasUser.role_id == Role.id)
+    )
+    return conn.scalars().first()
+
+
 async def verify_local_conn(session: AsyncSession, conn_id: str, password: str) -> bool:
     conn = await session.get(LocalConnection, conn_id)
     return hashing.verify_password(conn.password_hash, password)
@@ -75,6 +98,11 @@ async def get_telegram_conn_id_by_telegram_id(
     return conn_id.scalars().first()
 
 
+async def get_user_from_local_conn(session: AsyncSession, user_id: str) -> User | None:
+    conn = await session.execute(select(User).where(User.id == user_id))
+    return conn.scalars().first()
+
+
 __all__ = [
     "create_local_connection",
     "create_telegram_connection",
@@ -85,4 +113,7 @@ __all__ = [
     "get_telegram_conn_id_by_telegram_id",
     "get_user_by_id",
     "verify_local_conn",
+    "get_public_local_conn_by_email",
+    "get_user_from_local_conn",
+    "get_public_local_conn_by_user_id",
 ]

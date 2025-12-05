@@ -1,5 +1,6 @@
 import datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Thread
@@ -48,6 +49,13 @@ async def get_thread_by_id(session: AsyncSession, thread_id: str) -> Thread | No
     return await session.get(Thread, thread_id)
 
 
+async def get_all_user_threads(
+    session: AsyncSession, user_id: str, limit: int = 10
+) -> list[Thread] | None:
+    res = await session.execute(select(Thread).where(Thread.user_id == user_id).limit(limit))
+    return list(res.scalars().all())
+
+
 __all__ = [
     "create_thread",
     "get_thread_by_id",
@@ -55,4 +63,5 @@ __all__ = [
     "star_thread",
     "thread_to_project_connection",
     "update_thread_time",
+    "get_all_user_threads",
 ]

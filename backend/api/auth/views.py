@@ -23,13 +23,14 @@ auth_sc = AuthService()
 @auth_router.post("/login")
 async def login(response: Response, login_data: Annotated[UserLoginRequest, Body()]):
     try:
-        Logger.info("Processing login request")
+        Logger.info("Processing login request from %s", login_data.email or "unknown user")
         access, refresh = await auth_sc.login_locally(**login_data.model_dump())
         response.set_cookie(
             "refresh_token", refresh.token, expires=refresh.expires, httponly=True
         )
         return access
     except ValueError as e:
+        Logger.error("Login failed for %s: %s", login_data.email or "unknown user", e)
         return HTTPException(status_code=400, detail=str(e))
 
 
