@@ -12,6 +12,7 @@
   # WORKDIR / binaries / sha256 / folder (unzipped) / exe_name
 - platform: win32
   necessary: false
+  plugin: true
   type: llama.cpp
   filename: "llama-b6239-bin-win-cuda-12.4-x64.zip"
   folder: "llama-b6239-bin-win-cuda-12.4-x64"
