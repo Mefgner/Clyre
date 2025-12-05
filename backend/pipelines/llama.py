@@ -57,10 +57,9 @@ class LlamaLLMPipeline:
                     str(env.LLAMA_WIN_PORT),
                     "-ngl",
                     "40",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.STDOUT,
+                ]
             )
+            Logger.info("Started Llama.cpp executable with pid %d", self.__process.pid)
 
         self.is_running = True
 
