@@ -33,20 +33,21 @@ def _download_from_config(item_to_download: dict[str, str]) -> str:
     dest_subdir = item_to_download["dest_subdir"]
     filename = item_to_download["filename"]
     folder = item_to_download.get("folder")
+    plugin = item_to_download.get("plugin")
 
     if folder:
-        folder_path = cfg.get_app_runtime_dir() / dest_subdir / sha256 / folder
+        folder_path = cfg.get_app_runtime_dir() / dest_subdir / folder
         Logger.info("Checking if folder %s exists", shorter_path_repr(folder_path))
-        if folder_path.exists():
+        if folder_path.exists() and not plugin:
             Logger.info(
                 "Folder %s already exists, skipping download", shorter_path_repr(folder_path)
             )
             return str(folder)
 
-    file_path = cfg.get_app_runtime_dir() / dest_subdir / sha256 / filename
+    file_path = cfg.get_app_runtime_dir() / dest_subdir / filename
 
     Logger.info("Checking if file %s exists", shorter_path_repr(file_path))
-    if file_path.exists():
+    if file_path.exists() and not plugin:
         Logger.info("File %s already exists, skipping download", shorter_path_repr(file_path))
         return str(file_path)
 

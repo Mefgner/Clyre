@@ -59,11 +59,9 @@ def get_default_llama_executable() -> Path:
     for b in binaries:
         if b.get("type") == "llama.cpp" and b.get("platform") == sys.platform:
             dest_subdir = b["dest_subdir"]
-            sha256 = b["sha256"]
-            sha_suffix = sha256.split(":", 1)[1]
             folder = b["folder"]
             executable = b["exe_name"]
-            return get_app_runtime_dir() / dest_subdir / sha_suffix / folder / executable
+            return get_app_runtime_dir() / dest_subdir / folder / executable
     raise ValueError("No default llama executable")
 
 
@@ -80,12 +78,10 @@ def get_default_llama_model_path() -> Path:
     if not target:
         raise ValueError("No llama.cpp-compatible model found in models.yaml")
 
-    sha = target.get("sha256", "")
-    sha_suffix = sha.split(":", 1)[1]
     dest_subdir = target["dest_subdir"]
     filename = target["filename"]
 
-    return (get_app_runtime_dir() / dest_subdir / sha_suffix / filename).resolve()
+    return (get_app_runtime_dir() / dest_subdir / filename).resolve()
 
 
 @lru_cache(maxsize=16)
@@ -93,11 +89,9 @@ def resolve_llama_model_path(model_name: str) -> str | None:
     models = dict_from_yaml(get_app_root_dir() / "configs" / "models.yaml")
     for m in models:
         if m.get("name") == model_name and m.get("framework") == "llama":
-            sha = m.get("sha256", "")
-            sha_suffix = sha.split(":", 1)[1]
             dest_subdir = m["dest_subdir"]
             filename = m["filename"]
-            return str((get_app_runtime_dir() / dest_subdir / sha_suffix / filename).resolve())
+            return str((get_app_runtime_dir() / dest_subdir / filename).resolve())
     raise ValueError(f"Model '{model_name}' not found or not compatible with llama.cpp")
 
 
