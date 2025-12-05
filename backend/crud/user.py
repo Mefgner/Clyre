@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import LocalConnection, TelegramConnection, User, RoleHasUser, Role
+from models import LocalConnection, TelegramConnection, User
 from utils import hashing
 
 
@@ -48,29 +48,6 @@ async def get_user_by_id(session: AsyncSession, user_id: str) -> User | None:
 
 async def get_local_conn_by_email(session: AsyncSession, email: str) -> LocalConnection | None:
     conn = await session.execute(select(LocalConnection).where(LocalConnection.email == email))
-    return conn.scalars().first()
-
-
-async def get_public_local_conn_by_email(
-    session: AsyncSession, email: str
-) -> LocalConnection | None:
-    conn = await session.execute(
-        select(LocalConnection.email, LocalConnection.id, LocalConnection.name).where(
-            LocalConnection.email == email
-        )
-    )
-    return conn.scalars().first()
-
-
-async def get_public_local_conn_by_user_id(
-    session: AsyncSession, user_id: str
-) -> LocalConnection | None:
-    conn = await session.execute(
-        select(LocalConnection.id, LocalConnection.email, LocalConnection.name, Role.name)
-        .where(LocalConnection.user_id == user_id)
-        .join(RoleHasUser, LocalConnection.user_id == RoleHasUser.user_id)
-        .join(Role, RoleHasUser.role_id == Role.id)
-    )
     return conn.scalars().first()
 
 
