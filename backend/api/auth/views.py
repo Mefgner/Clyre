@@ -67,17 +67,18 @@ async def refresh_access(
     return access
 
 
-@auth_router.post("/telegram-register")
-async def telegram_register(
-    request: TelegramRegistrationRequest,
-    _: Annotated[NoneType, Depends(web.extract_service_token)],
-):
-    try:
-        Logger.info("Processing telegram registration request from %s", request.user_id)
-        await auth_sc.register_telegram(request.user_id, request.chat_id)
-    except ValueError as exc:
-        if "already exists" in str(exc):
-            raise HTTPException(
-                status_code=209, detail="Telegram account already exists"
-            ) from exc
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+# @auth_router.post("/telegram-register")
+# async def telegram_register(
+#     request: TelegramRegistrationRequest,
+#     _: Annotated[NoneType, Depends(web.extract_service_token)],
+#     session: Annotated[AsyncSession, Depends(get_db_session)],
+# ):
+#     try:
+#         Logger.info("Processing telegram registration request from %s", request.user_id)
+#         await auth_sc.register_telegram(session, request.user_id, request.chat_id)
+#     except ValueError as exc:
+#         if "already exists" in str(exc):
+#             raise HTTPException(
+#                 status_code=209, detail="Telegram account already exists"
+#             ) from exc
+#         raise HTTPException(status_code=400, detail=str(exc)) from exc

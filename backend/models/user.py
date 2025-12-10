@@ -10,9 +10,9 @@ class User(Base):
     local_connections = relationship(
         "LocalConnection", back_populates="user", cascade="all, delete-orphan"
     )
-    telegram_connections = relationship(
-        "TelegramConnection", back_populates="user", cascade="all, delete-orphan"
-    )
+    # telegram_connections = relationship(
+    #     "TelegramConnection", back_populates="user", cascade="all, delete-orphan"
+    # )
 
     files = relationship("File", back_populates="user", cascade="all, delete-orphan")
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")

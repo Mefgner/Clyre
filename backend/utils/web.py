@@ -63,14 +63,14 @@ def extract_refresh_token(
         ) from exc
 
 
-def extract_service_token(
-    token: Annotated[HTTPAuthorizationCredentials, Depends(_extract_header_credentials)],
-) -> None:
-    if env.SERVICE_SECRET.lower() in ("forbidden", "forbiden", "", "none", None):
-        raise HTTPException(status_code=403, detail="Access using service token is forbidden")
-    if token.scheme.lower() != "service":
-        raise HTTPException(
-            status_code=403, detail="Invalid authorization header, unsupported scheme"
-        )
-    if not token.credentials == env.SERVICE_SECRET:
-        raise HTTPException(status_code=403, detail="Invalid service token")
+# def extract_service_token(
+#     token: Annotated[HTTPAuthorizationCredentials, Depends(_extract_header_credentials)],
+# ) -> None:
+#     if env.SERVICE_SECRET.lower() in ("forbidden", "forbiden", "", "none", None):
+#         raise HTTPException(status_code=403, detail="Access using service token is forbidden")
+#     if token.scheme.lower() != "service":
+#         raise HTTPException(
+#             status_code=403, detail="Invalid authorization header, unsupported scheme"
+#         )
+#     if not token.credentials == env.SERVICE_SECRET:
+#         raise HTTPException(status_code=403, detail="Invalid service token")
