@@ -1,0 +1,63 @@
+/**
+* src/styles/settings.scss
+*
+* Configures SASS variables and Vuetify overwrites
+*/
+
+// https://vuetifyjs.com/features/sass-variables/`
+@use 'vuetify/settings';
+
+* {
+  scrollbar-color: #888 transparent;
+}
+
+.v-btn, .v-list-item {
+  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s !important;
+}
+
+.v-btn:active, .v-list-item:active {
+  transform: scale(0.99);
+}
+
+.v-menu .v-list {
+  padding: 2px 2px !important;
+  border-radius: 24px !important;
+  box-shadow: 0 0 0 0;
+}
+
+.v-select__content {
+  border-radius: 24px !important;
+}
+
+.v-menu .v-list .v-list-item {
+  scrollbar-arrow-color: transparent;
+  margin: 6px;
+  border-radius: 24px !important;
+}
+
+.v-navigation-drawer__content {
+  display: flex;
+  flex-direction: column;
+}
+
+.v-list-item:hover .v-list-item__append, .v-list-item--active .v-list-item__append {
+  opacity: 1;
+}
+
+.v-list-item__append {
+  opacity: 0;
+}
+
+.bottom-chat-shadow {
+  height: 120px;
+  z-index: 10;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgb(var(--v-theme-background)) 20%, transparent);
+}
+
+.top-chat-shadow {
+  height: 180px;
+  z-index: 10;
+  pointer-events: none;
+  background: linear-gradient(to top, rgb(var(--v-theme-background)) 40%, transparent);
+}

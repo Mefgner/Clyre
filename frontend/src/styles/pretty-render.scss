@@ -1,0 +1,72 @@
+@use 'vuetify/settings' as v;
+
+.pretty-rendered {
+  * {
+    white-space: pre-wrap;
+  }
+
+  p {
+    margin-bottom: 0.4rem;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  ul, ol {
+    margin: 0.3rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  li {
+    margin-left: 1rem;
+  }
+
+  pre {
+    border-radius: 0.87rem;
+    background-color: map-get(v.$grey, 'darken-3');
+    backdrop-filter: opacity(0.1);
+    padding: 0.8rem 0.5rem 0.8rem 1rem;
+    font-size: 0.87rem;
+    word-wrap: break-word;
+    font-family: 'Fira Code', monospace;
+  }
+
+  hr {
+    border: 0;
+    border-top: 0.01rem solid map-get(v.$grey, 'darken-2');
+    margin: 1rem 3px;
+    opacity: 0.5;
+  }
+
+  table {
+    border-collapse: collapse;
+    border: 0.01rem solid map-get(v.$grey, 'darken-3');
+    border-radius: 1rem;
+    width: 100%;
+    margin: 0.8rem 0;
+
+    thead {
+      border-bottom: 0.01rem solid map-get(v.$grey, 'darken-3');
+    }
+
+    td, th {
+      border-right: 0.01rem solid map-get(v.$grey, 'darken-3');
+    }
+
+    td {
+      border-bottom: 0.01rem solid map-get(v.$grey, 'darken-4');
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    * {
+      padding: 0.25rem;
+    }
+  }
+}
