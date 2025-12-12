@@ -16,7 +16,7 @@ Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
 
 
-class SessionManager:
+class AsyncSessionManager:
     def __init__(self, echo: bool = False):
         Logger.info("Initializing database engine")
         self._db_base = f"{env.DB_ENGINE}+{env.DB_RUNTIME}://"
@@ -37,16 +37,16 @@ class SessionManager:
             await conn.run_sync(Base.metadata.create_all)
 
     @property
-    def engine(self) -> AsyncEngine:
+    def async_engine(self) -> AsyncEngine:
         return self._engine
 
     @property
-    def session_maker(self) -> async_sessionmaker[AsyncSession]:
+    def async_session_maker(self) -> async_sessionmaker[AsyncSession]:
         return self._session_maker
 
     @property
     @asynccontextmanager
-    async def context_manager(self) -> AsyncIterator[AsyncSession]:
+    async def async_session_context_manager(self) -> AsyncIterator[AsyncSession]:
         Logger.debug("Creating database session")
         async with self._session_maker() as session:
             try:
@@ -63,13 +63,20 @@ class SessionManager:
         await self._engine.dispose()
 
 
-sm_instance: SessionManager | None = None
+sm_instance: AsyncSessionManager | None = None
 
 
-def get_session_manager() -> SessionManager:
+def get_session_manager() -> AsyncSessionManager:
     Logger.debug("Getting session manager")
     global sm_instance
     if not sm_instance:
-        Logger.debug("Creating new session manager")
-        sm_instance = SessionManager()
+        Logger.info("Creating new session manager")
+        sm_instance = AsyncSessionManager()
     return sm_instance
+
+
+async def get_db_session() -> AsyncIterator[AsyncSession]:
+    sm = get_session_manager()
+    Logger.debug("Creating database session for request")
+    async with sm.async_session_maker() as session:
+        yield session
