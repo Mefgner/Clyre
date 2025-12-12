@@ -1,3 +1,14 @@
+# Tracing processes
+
+# import hunter
+# from hunter import Q
+# hunter.trace(
+#     ~Q(module_in=(".venv", "site-packages", "sqlalchemy")),
+#     Q(module_in=("app", "utils", "services", "models", "manager", "views", "crud", "schemas", "pipelines", "db")),
+#     stdlib=False,
+#     action=hunter.CallPrinter(stream=open('startup_trace.txt', 'w', encoding='utf-8'))
+# )
+
 import uvicorn
 
 from app import app
@@ -18,15 +29,8 @@ if __name__ == "__main__":
 
 # TODO: refactor CRUD ops, make 1 to 3 but more configurable crud function to get a Model
 
-# TODO: dependency injection with db session in request
-
-# TODO: write
-
-
-# TODO: extract general code from view.
 # TODO: refactor service function to make them more simple and less god-like.
 
 # TODO: a initial way to compress chat history.
 
 # TODO: try to make less abstractions while generating completion.
-# TODO: make a queue for each user.
