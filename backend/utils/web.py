@@ -11,12 +11,12 @@ from utils import cfg, env, hashing, timing
 def _extract_header_credentials(authorization: Annotated[str | None, Header()] = None):
     if authorization is None:
         raise HTTPException(
-            status_code=400, detail="Invalid authorization header, no credentials provided"
+            status_code=401, detail="Invalid authorization header, no credentials provided"
         )
 
     if not authorization.lower().startswith(("bearer ", "service ")):
         raise HTTPException(
-            status_code=400, detail="Invalid authorization header, unsupported scheme"
+            status_code=401, detail="Invalid authorization header, unsupported scheme"
         )
 
     scheme, credentials = authorization.split(" ", 1)
@@ -28,7 +28,7 @@ def extract_access_token(
 ):
     if token.scheme.lower() != "bearer":
         raise HTTPException(
-            status_code=400, detail="Invalid authorization header, unsupported scheme"
+            status_code=401, detail="Invalid authorization header, unsupported scheme"
         )
     try:
         token_dict = hashing.verify_jwt(token.credentials, env.ACCESS_TOKEN_SECRET)
@@ -41,7 +41,7 @@ def extract_access_token(
         return general.TokenPayload(**token_dict)
     except ValueError as exc:
         raise HTTPException(
-            status_code=400, detail="Invalid access token, token expired or malformed"
+            status_code=401, detail="Invalid access token, token expired or malformed"
         ) from exc
 
 
