@@ -36,14 +36,18 @@ class LocalConnection(Base):
     user = relationship("User", back_populates="local_connections")
 
 
-class TelegramConnection(Base):
-    __tablename__ = "telegram_connection"
+# class TelegramConnection(Base):
+#     __tablename__ = "telegram_connection"
 
-    user_id = mapped_column(String(50), ForeignKey("user.id"))
-    telegram_id = mapped_column(String(50), nullable=False, unique=True, index=True)
-    chat_id = mapped_column(String(50), nullable=False)
+#     user_id = mapped_column(String(50), ForeignKey("user.id"))
+#     telegram_id = mapped_column(String(50), nullable=False, unique=True, index=True)
+#     chat_id = mapped_column(String(50), nullable=False)
 
-    user = relationship("User", back_populates="telegram_connections")
+#     user = relationship("User", back_populates="telegram_connections")
 
 
-__all__ = ["LocalConnection", "TelegramConnection", "User"]
+__all__ = [
+    "LocalConnection",
+    # "TelegramConnection",
+    "User",
+]
