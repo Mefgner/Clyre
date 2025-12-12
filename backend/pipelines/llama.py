@@ -57,7 +57,10 @@ class LlamaLLMPipeline:
                     str(env.LLAMA_WIN_PORT),
                     "-ngl",
                     "40",
-                ]
+                    "--jinja",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
             Logger.info("Started Llama.cpp executable with pid %d", self.__process.pid)
 
@@ -73,6 +76,8 @@ class LlamaLLMPipeline:
                     break
                 except httpx.HTTPStatusError:
                     await asyncio.sleep(2)
+                except httpx.ConnectError:
+                    await asyncio.sleep(5)
 
     def _build_payload(
         self,
@@ -92,7 +97,7 @@ class LlamaLLMPipeline:
     async def chat_completion_sync(
         self,
         history: list[dict[str, str]],
-        max_tokens: int = 512,
+        max_tokens: int = 800,
         temperature: float = 0.7,
     ):
         payload = self._build_payload(history, max_tokens, temperature, stream=False)
@@ -112,7 +117,7 @@ class LlamaLLMPipeline:
     async def chat_completion_stream(
         self,
         history: list[dict[str, str]],
-        max_tokens: int = 512,
+        max_tokens: int = 800,
         temperature: float = 0.7,
     ) -> AsyncGenerator[str, None]:
         payload = self._build_payload(history, max_tokens, temperature, stream=True)

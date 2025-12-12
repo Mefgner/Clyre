@@ -1,14 +1,18 @@
 import logging
-from types import NoneType
 from typing import Annotated
 
 from fastapi import APIRouter, Body, HTTPException, Response
 from fastapi.params import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from db import get_db_session
 from schemas.auth import (
-    TelegramRegistrationRequest,
     UserLoginRequest,
     UserRegisterRequest,
+    LogoutResponse,
+    RefreshResponse,
+    RegisterResponse,
+    LoginResponse,
 )
 from schemas.general import TokenPayload
 from services.auth import AuthService
@@ -20,43 +24,54 @@ auth_router = APIRouter(tags=["auth"])
 auth_sc = AuthService()
 
 
-@auth_router.post("/login")
-async def login(response: Response, login_data: Annotated[UserLoginRequest, Body()]):
+@auth_router.post("/login", response_model=LoginResponse, status_code=200)
+async def login(
+    response: Response,
+    login_data: Annotated[UserLoginRequest, Body()],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
     try:
         Logger.info("Processing login request from %s", login_data.email or "unknown user")
-        access, refresh = await auth_sc.login_locally(**login_data.model_dump())
+        access, refresh = await auth_sc.login_locally(session, **login_data.model_dump())
         response.set_cookie(
             "refresh_token", refresh.token, expires=refresh.expires, httponly=True
         )
-        return access
+        return LoginResponse(token=access.token)
     except ValueError as e:
         Logger.error("Login failed for %s: %s", login_data.email or "unknown user", e)
         return HTTPException(status_code=400, detail=str(e))
 
 
-@auth_router.post("/register")
+@auth_router.post("/register", response_model=RegisterResponse, status_code=201)
 async def register(
-    response: Response, registration_data: Annotated[UserRegisterRequest, Body()]
+    response: Response,
+    registration_data: Annotated[UserRegisterRequest, Body()],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     try:
         Logger.info("Processing registration request from %s", registration_data.email)
-        access, refresh = await auth_sc.register_locally(**registration_data.model_dump())
+        access, refresh = await auth_sc.register_locally(
+            session, **registration_data.model_dump()
+        )
+
+        await session.commit()
+
         response.set_cookie(
             "refresh_token", refresh.token, expires=refresh.expires, httponly=True
         )
-        return access
+        return RegisterResponse(token=access.token)
     except ValueError as e:
         return HTTPException(status_code=400, detail=str(e))
 
 
-@auth_router.post("/logout")
+@auth_router.post("/logout", response_model=LogoutResponse, status_code=200)
 async def logout(response: Response):
     Logger.info("Processing logout request")
     response.delete_cookie("refresh_token")
     return {"message": "Successfully logged out"}
 
 
-@auth_router.post("/refresh")
+@auth_router.post("/refresh", response_model=RefreshResponse, status_code=200)
 async def refresh_access(
     response: Response,
     refresh_payload: Annotated[TokenPayload, Depends(web.extract_refresh_token)],
@@ -64,7 +79,7 @@ async def refresh_access(
     Logger.info("Processing refresh request")
     access, refresh = await auth_sc.refresh_token(refresh_payload)
     response.set_cookie("refresh_token", refresh.token, expires=refresh.expires, httponly=True)
-    return access
+    return RefreshResponse(token=access.token)
 
 
 # @auth_router.post("/telegram-register")

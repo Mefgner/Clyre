@@ -1,16 +1,14 @@
-from crud import get_public_local_conn_by_user_id
-from db import get_session_manager
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from crud import get_local_conn_by_user_id
 
 
 class UserService:
     @staticmethod
-    async def get_user_by_id(user_id: str):
-        sm = get_session_manager()
+    async def get_local_conn_from_internal_user(session: AsyncSession, user_id: str):
+        local_conn = await get_local_conn_by_user_id(session, user_id)
 
-        async with sm.context_manager as session:
-            local_conn = await get_public_local_conn_by_user_id(session, user_id)
+        if not local_conn:
+            raise ValueError("User not found")
 
-            if not local_conn:
-                raise ValueError("User not found")
-
-            return local_conn
+        return local_conn
