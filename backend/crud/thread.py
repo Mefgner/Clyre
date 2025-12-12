@@ -2,8 +2,9 @@ import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import contains_eager
 
-from models import Thread
+from models import Thread, Message
 from utils import hashing
 
 
@@ -45,15 +46,32 @@ async def update_thread_time(
     session.add(thread)
 
 
-async def get_thread_by_id(session: AsyncSession, thread_id: str) -> Thread | None:
-    return await session.get(Thread, thread_id)
+async def get_thread_by_id(
+    session: AsyncSession, thread_id: str, user_id: str, load_messages: bool = True
+) -> Thread | None:
+    query = select(Thread).where(Thread.id == thread_id, Thread.user_id == user_id)
+    if load_messages:
+        query = (
+            query.outerjoin(Thread.messages)
+            .options(contains_eager(Thread.messages))
+            .order_by(Message.order.asc())
+        )
+    res = await session.execute(query)
+    return res.scalars().unique().first()
 
 
 async def get_all_user_threads(
-    session: AsyncSession, user_id: str, limit: int = 10
+    session: AsyncSession, user_id: str, limit: int | None = None
 ) -> list[Thread] | None:
-    res = await session.execute(select(Thread).where(Thread.user_id == user_id).limit(limit))
+    query = select(Thread).where(Thread.user_id == user_id)
+    if limit is not None:
+        query = query.limit(limit)
+    res = await session.execute(query)
     return list(res.scalars().all())
+
+
+async def delete_thread(session: AsyncSession, thread: Thread) -> None:
+    await session.delete(thread)
 
 
 __all__ = [

@@ -5,6 +5,11 @@ from models import LocalConnection, User
 from utils import hashing
 
 
+#
+# Create
+#
+
+
 async def create_user(session: AsyncSession) -> str:
     """returns user id"""
     user = User(id=hashing.generate_uuid())
@@ -42,8 +47,17 @@ async def create_local_connection(
 #     return connection.id
 
 
+#
+# Read
+#
+
+
 async def get_user_by_id(session: AsyncSession, user_id: str) -> User | None:
     return await session.get(User, user_id)
+
+
+async def get_local_conn_by_id(session: AsyncSession, conn_id: str) -> LocalConnection | None:
+    return await session.get(LocalConnection, conn_id)
 
 
 async def get_local_conn_by_email(session: AsyncSession, email: str) -> LocalConnection | None:
@@ -51,32 +65,12 @@ async def get_local_conn_by_email(session: AsyncSession, email: str) -> LocalCon
     return conn.scalars().first()
 
 
-async def verify_local_conn(session: AsyncSession, conn_id: str, password: str) -> bool:
-    conn = await session.get(LocalConnection, conn_id)
-    return hashing.verify_password(conn.password_hash, password)
-
-
-async def get_local_conn_by_id(session: AsyncSession, conn_id: str) -> LocalConnection | None:
-    return await session.get(LocalConnection, conn_id)
-
-
-async def get_telegram_conn_by_id(
-    session: AsyncSession, conn_id: str
-) -> TelegramConnection | None:
-    return await session.get(TelegramConnection, conn_id)
-
-
-async def get_telegram_conn_id_by_telegram_id(
-    session: AsyncSession, telegram_id: str
-) -> str | None:
-    conn_id = await session.execute(
-        select(TelegramConnection.id).where(TelegramConnection.telegram_id == telegram_id)
+async def get_local_conn_by_user_id(
+    session: AsyncSession, user_id: str
+) -> LocalConnection | None:
+    conn = await session.execute(
+        select(LocalConnection).where(LocalConnection.user_id == user_id)
     )
-    return conn_id.scalars().first()
-
-
-async def get_user_from_local_conn(session: AsyncSession, user_id: str) -> User | None:
-    conn = await session.execute(select(User).where(User.id == user_id))
     return conn.scalars().first()
 
 
@@ -102,11 +96,8 @@ __all__ = [
     "create_user",
     "get_local_conn_by_email",
     "get_local_conn_by_id",
+    "get_local_conn_by_user_id",
     # "get_telegram_conn_by_id",
     # "get_telegram_conn_id_by_telegram_id",
     "get_user_by_id",
-    "verify_local_conn",
-    "get_public_local_conn_by_email",
-    "get_user_from_local_conn",
-    "get_public_local_conn_by_user_id",
 ]

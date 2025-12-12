@@ -56,7 +56,7 @@ async def get_messages_in_thread(
 ) -> Sequence[Message]:
     result = await session.execute(
         select(Message)
-        .where(Message.thread_id == thread_id and Message.user_id == user_id)
+        .where(Message.thread_id == thread_id, Message.user_id == user_id)
         .order_by(Message.order.asc())
         .limit(n)
     )
