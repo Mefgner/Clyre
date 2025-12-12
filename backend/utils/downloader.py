@@ -27,7 +27,7 @@ def shorter_path_repr(path: Path | str) -> str:
     return path
 
 
-def _download_from_config(item_to_download: dict[str, str]) -> str:
+def _download_from_config(item_to_download: dict[str, str]) -> str | list[str]:
     url = item_to_download["url"]
     sha256 = item_to_download["sha256"].split(":")[1]
     dest_subdir = item_to_download["dest_subdir"]
