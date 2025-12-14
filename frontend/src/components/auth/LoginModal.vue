@@ -14,7 +14,7 @@
 
 <template>
   <v-dialog v-model="model" persistent>
-    <v-card elevation="12" rounded="xl">
+    <v-card elevation="12" max-width="400" rounded="xl">
       <v-card-title class="text-h5 font-weight-bold pa-4 ml-1">
         Login to Clyre
       </v-card-title>
