@@ -5,8 +5,8 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class UserLoginRequest(BaseModel):
-    email: EmailStr
-    password: Annotated[str, Len(8, 30)] = Field(pattern=r"[\w\d!@#$%^&*()_\+\/\-\*\+]{8,}")
+    email: str
+    password: str
 
 
 class TelegramRegistrationRequest(BaseModel):

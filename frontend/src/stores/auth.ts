@@ -14,13 +14,23 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const login = async (credentials: AuthCredentials) => {
-    const response = await AuthRepo.login(credentials)
-    accessToken.value = response.data.token
+    try {
+      const response = await AuthRepo.login(credentials)
+      accessToken.value = response.data.token
+    } catch (error) {
+      accessToken.value = null
+      throw error
+    }
   }
 
   const register = async (credentials: RegisterCredentials) => {
-    const response = await AuthRepo.register(credentials)
-    accessToken.value = response.data.token
+    try {
+      const response = await AuthRepo.register(credentials)
+      accessToken.value = response.data.token
+    } catch (error) {
+      accessToken.value = null
+      throw error
+    }
   }
 
   const logout = async () => {

@@ -3,7 +3,9 @@ import { ref } from 'vue'
 
 export const useUiStore = defineStore('ui', () => {
   const isLoginOpen = ref(false)
+  const loginError = ref('')
   const isRegisterOpen = ref(false)
+  const registerError = ref('')
   const isProfileOpen = ref(false)
   const isDeleteConfirmOpen = ref(false)
 
@@ -27,14 +29,22 @@ export const useUiStore = defineStore('ui', () => {
     isDeleteConfirmOpen.value = false
   }
 
+  function clearErrors () {
+    loginError.value = ''
+    registerError.value = ''
+  }
+
   return {
     isLoginOpen,
+    loginError,
     isRegisterOpen,
+    registerError,
     isProfileOpen,
     isDeleteConfirmOpen,
     openLogin,
     openRegister,
     openDeleteConfirm,
     closeModal,
+    clearErrors,
   }
 })

@@ -18,6 +18,8 @@ declare module 'vue' {
     ChatBubble: typeof import('./components/chat/ChatBubble.vue')['default']
     Login: typeof import('./components/auth/login.vue')['default']
     LoginModal: typeof import('./components/auth/LoginModal.vue')['default']
+    ModalBase: typeof import('./components/ModalBase.vue')['default']
+    ModalContainer: typeof import('./components/ModalContainer.vue')['default']
     PrettyMarkdown: typeof import('./components/chat/PrettyMarkdown.vue')['default']
     PromptBar: typeof import('./components/chat/PromptBar.vue')['default']
     QueryBar: typeof import('./components/chat/QueryBar.vue')['default']

@@ -1,8 +1,10 @@
+import re
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Body, HTTPException, Response
-from fastapi.params import Depends
+from email_validator import validate_email, EmailNotValidError
+from fastapi import APIRouter, HTTPException, Response
+from fastapi.params import Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import get_db_session
@@ -24,12 +26,63 @@ auth_router = APIRouter(tags=["auth"])
 auth_sc = AuthService()
 
 
+def check_auth(auth_data: UserLoginRequest):
+    try:
+        if not validate_email(auth_data.email):
+            raise HTTPException(status_code=422, detail="Invalid email")
+    except EmailNotValidError:
+        raise HTTPException(status_code=422, detail="Invalid email")
+
+    if not auth_data.password:
+        raise HTTPException(status_code=422, detail="Password is required")
+
+    if len(auth_data.password) < 8:
+        raise HTTPException(
+            status_code=422, detail="Password must be at least 8 characters long"
+        )
+
+    if not re.search(r"[A-Z]", auth_data.password):
+        raise HTTPException(
+            status_code=422, detail="Password must contain at least one uppercase letter"
+        )
+
+    if not re.search(r"[a-z]", auth_data.password):
+        raise HTTPException(
+            status_code=422, detail="Password must contain at least one lowercase letter"
+        )
+
+    if not re.search(r"\d", auth_data.password):
+        raise HTTPException(status_code=422, detail="Password must contain at least one digit")
+
+    if not re.search(r"\W", auth_data.password):
+        raise HTTPException(
+            status_code=422, detail="Password must contain at least one special character"
+        )
+
+
+def check_register(auth_data: UserRegisterRequest):
+    check_auth(auth_data)
+
+    if len(auth_data.name) not in range(3, 31):
+        raise HTTPException(
+            status_code=422, detail="Name must be between 3 and 30 characters long"
+        )
+
+    if not re.match(r"^[\w_]+$", auth_data.name):
+        raise HTTPException(
+            status_code=422, detail="Name can only contain letters, numbers and underscores"
+        )
+
+
 @auth_router.post("/login", response_model=LoginResponse, status_code=200)
 async def login(
     response: Response,
     login_data: Annotated[UserLoginRequest, Body()],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
+
+    check_auth(login_data)
+
     try:
         Logger.info("Processing login request from %s", login_data.email or "unknown user")
         access, refresh = await auth_sc.login_locally(session, **login_data.model_dump())
@@ -39,7 +92,7 @@ async def login(
         return LoginResponse(token=access.token)
     except ValueError as e:
         Logger.error("Login failed for %s: %s", login_data.email or "unknown user", e)
-        return HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @auth_router.post("/register", response_model=RegisterResponse, status_code=201)
@@ -48,6 +101,9 @@ async def register(
     registration_data: Annotated[UserRegisterRequest, Body()],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
+
+    check_register(registration_data)
+
     try:
         Logger.info("Processing registration request from %s", registration_data.email)
         access, refresh = await auth_sc.register_locally(
@@ -61,7 +117,8 @@ async def register(
         )
         return RegisterResponse(token=access.token)
     except ValueError as e:
-        return HTTPException(status_code=400, detail=str(e))
+        Logger.error("Registration failed for %s: %s", registration_data.email, e)
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @auth_router.post("/logout", response_model=LogoutResponse, status_code=200)

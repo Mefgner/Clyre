@@ -49,11 +49,14 @@ class AuthService:
         user_id: str | None = None,
     ):
         lookup_existence = await get_local_conn_by_email(session, email)
+
         if lookup_existence:
             raise ValueError("Email already exists")
 
         if not user_id:
             user_id = await create_user(session)
+
+            await session.commit()
 
         await create_local_connection(session, name, user_id, email, password)
 
