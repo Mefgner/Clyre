@@ -5,9 +5,10 @@ import type {
   ThreadStreamingPayload,
 } from '@/entities/thread.ts'
 
+import { AxiosError } from 'axios'
 import { defineStore } from 'pinia'
-import { reactive, ref } from 'vue'
 
+import { reactive, ref } from 'vue'
 import { threadRepo } from '@/repos/thread.ts'
 import { readNDJSONStream } from '@/utils/stream.ts'
 
@@ -26,8 +27,19 @@ export const useThreadStore = defineStore('thread', () => {
   const currentThread = ref<ThreadHistory>(newThread())
 
   const getThreadsMeta = async () => {
-    const response = await threadRepo.getAllThreadsMeta()
-    threadsMeta.value = response.data.threads
+    try {
+      const response = await threadRepo.getAllThreadsMeta()
+      threadsMeta.value = response.data.threads
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        if (!error?.status) {
+          throw error
+        }
+        if (error?.status !== 404) {
+          throw error
+        }
+      }
+    }
   }
 
   const clearThreadsMeta = () => {

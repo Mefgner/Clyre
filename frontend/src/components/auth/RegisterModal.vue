@@ -9,7 +9,7 @@
 
   const error = computed(() => validateRegisterCredentials(name.value, email.value, password.value, passwordCopy.value))
 
-  defineProps<{ registerError: string }>()
+  defineProps<{ authError: string }>()
 
   const model = defineModel<boolean>({ default: false })
 
@@ -62,8 +62,8 @@
         <span v-if="error" class="ml-2 text-red-accent-1 text-caption">
           {{ error }}
         </span>
-        <span v-if="registerError" class="ml-2 text-red-accent-1 text-caption">
-          {{ registerError }}
+        <span v-if="authError && !error" class="ml-2 text-red-accent-1 text-caption">
+          {{ authError }}
         </span>
       </v-card-text>
 
