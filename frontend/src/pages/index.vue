@@ -122,7 +122,7 @@
   <v-container class="fill-height align-start justify-center pa-0">
     <v-row class="ma-1" justify="center" no-gutters>
       <v-col class="pa-4" lg="6">
-        <router-view :key="String($route.query.chatId)" v-slot="{ Component }">
+        <router-view :key="String($route?.params?.chatId)" v-slot="{ Component }">
           <Component :is="Component" />
         </router-view>
         <div style="height: 128px; flex-shrink: 0;" />
