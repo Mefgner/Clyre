@@ -30,6 +30,7 @@
         <form class="d-flex flex-column ga-3 mb-2" @submit.prevent.stop>
           <v-text-field
             v-model="name"
+            autocomplete="username"
             density="comfortable"
             label="Username"
             rounded="xl"
@@ -37,6 +38,7 @@
           />
           <v-text-field
             v-model="email"
+            autocomplete="email"
             density="comfortable"
             label="Email"
             rounded="xl"
@@ -44,6 +46,7 @@
           />
           <v-text-field
             v-model="password"
+            autocomplete="password"
             density="comfortable"
             label="Password"
             rounded="xl"
@@ -52,6 +55,7 @@
           />
           <v-text-field
             v-model="passwordCopy"
+            autocomplete="new-password"
             density="comfortable"
             label="Password (again)"
             rounded="xl"

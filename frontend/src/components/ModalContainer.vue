@@ -39,7 +39,7 @@
       if (!(error instanceof AxiosError)) return
       if (!error?.status) return
 
-      uiStore.loginError = error?.status in [400, 422] ? 'Invalid email or password.' : 'An unknown error occurred. Please try again.'
+      uiStore.loginError = [400, 422].includes(error.status) ? 'Invalid email or password.' : 'An unknown error occurred. Please try again.'
     }
   }
 

@@ -24,6 +24,7 @@
         <form @submit.prevent.stop>
           <v-text-field
             v-model="email"
+            autocomplete="email"
             class="mb-4"
             density="compact"
             label="Email"
@@ -33,6 +34,7 @@
 
           <v-text-field
             v-model="password"
+            autocomplete="current-password"
             class="mb-1"
             density="compact"
             label="Password"
