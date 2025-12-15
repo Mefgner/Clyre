@@ -22,7 +22,7 @@
   }
 
   li {
-    margin-left: 1rem;
+    margin-left: 0.8rem;
   }
 
   pre {
@@ -30,6 +30,7 @@
     background-color: map-get(v.$grey, 'darken-3');
     backdrop-filter: opacity(0.1);
     padding: 0.8rem 0.5rem 0.8rem 1rem;
+    margin-bottom: 0.8rem;
     font-size: 0.87rem;
     word-wrap: break-word;
     font-family: 'Fira Code', monospace;
