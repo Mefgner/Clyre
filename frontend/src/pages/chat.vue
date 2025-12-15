@@ -1,6 +1,5 @@
 <script setup lang="ts">
   import { onUnmounted, onUpdated, useTemplateRef, watch } from 'vue'
-  import router from '@/router'
   import { useThreadStore } from '@/stores/thread.ts'
 
   const threadStore = useThreadStore()
@@ -9,10 +8,7 @@
 
   watch([() => threadStore.threadsMeta, () => props.chatId], async () => {
     const threadMeta = threadStore.threadsMeta.find(thread => thread.id === props.chatId)
-    if (!threadMeta) {
-      await router.push({ name: 'chat', params: { chatId: 'new' } })
-      return
-    }
+    if (!threadMeta) return
     if (threadStore.currentThread.id === threadMeta.id) return
     threadStore.setCurrentThread(threadMeta)
   }, { immediate: true })
