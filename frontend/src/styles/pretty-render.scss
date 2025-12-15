@@ -22,18 +22,22 @@
   }
 
   li {
-    margin-left: 0.8rem;
+    margin-left: 1rem;
   }
 
   pre {
     border-radius: 0.87rem;
-    background-color: map-get(v.$grey, 'darken-3');
+    overflow-x: auto;
+    overflow-block: hidden;
     backdrop-filter: opacity(0.1);
-    padding: 0.8rem 0.5rem 0.8rem 1rem;
-    margin-bottom: 0.8rem;
+    margin: 0.8rem 0;
     font-size: 0.87rem;
     word-wrap: break-word;
     font-family: 'Fira Code', monospace;
+  }
+
+  pre code {
+    overflow-clip: none;
   }
 
   hr {

@@ -119,9 +119,11 @@
     class="bottom-chat-shadow position-fixed top-0 left-0 right-0 w-100"
   />
 
-  <v-container class="fill-height align-start justify-center pa-0">
+  <v-container class="fill-height align-start justify-center pa-0" max-width="675">
     <v-row class="ma-1" justify="center" no-gutters>
-      <v-col class="pa-4" lg="6">
+      <v-col
+        class="pa-4"
+      >
         <router-view :key="String($route?.params?.chatId)" v-slot="{ Component }">
           <Component :is="Component" />
         </router-view>
@@ -133,16 +135,15 @@
   <v-footer
     app
     class="justify-center pa-0 pointer-events-none"
-    shadow="shadow"
   >
-    <v-container class="pa-0" fluid style="position: relative;">
-      <v-row class="ma-0" justify="center">
+    <v-container
+      class="pa-0 position-absolute"
+      max-width="660"
+      style="z-index: 50;"
+    >
+      <v-row class="ma-0" justify="center" no-gutters>
         <v-col
           class="position-absolute bottom-0 w-100 px-4 pb-4"
-          cols="12"
-          lg="6"
-          md="11"
-          style="z-index: 50;"
         >
           <v-fade-transition>
             <prompt-bar :is-generating="threadStore.isGenerating" @send-message="generateAnswer" />
@@ -154,7 +155,6 @@
 </template>
 
 <script lang="ts" setup>
-  import type PromptBar from '@/components/chat/PromptBar.vue'
   import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
   import { useRouter } from 'vue-router'
   import { useDisplay } from 'vuetify'
