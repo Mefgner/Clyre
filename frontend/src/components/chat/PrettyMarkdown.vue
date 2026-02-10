@@ -2,16 +2,33 @@
   import hljs from 'highlight.js'
   import { Marked } from 'marked'
   import { markedHighlight } from 'marked-highlight'
-  import { computed } from 'vue'
+  import { computed, onBeforeUnmount, watch } from 'vue'
   import { useTheme } from 'vuetify'
 
   const theme = useTheme()
 
-  if (theme.current.value.dark) {
-    import('highlight.js/styles/agate.min.css')
-  } else {
-    import('highlight.js/styles/github.css')
+  let currentStyleLink: HTMLLinkElement | null = null
+
+  function applyHighlightTheme () {
+    if (currentStyleLink) {
+      currentStyleLink.remove()
+    }
+
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = theme.current.value.dark
+      ? import.meta.env.VITE_HLJS_DARK_STYLE_URL
+      : import.meta.env.VITE_HLJS_LIGHT_STYLE_URL
+
+    document.head.append(link)
+    currentStyleLink = link
   }
+
+  watch(() => theme.current.value.dark, applyHighlightTheme, { immediate: true })
+
+  onBeforeUnmount(() => {
+    currentStyleLink?.remove()
+  })
 
   const props = defineProps<{ value: string }>()
 
