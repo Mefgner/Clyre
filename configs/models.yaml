@@ -1,0 +1,8 @@
+- filename: "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+  name: "Qwen-3-Instruct"
+  family: Qwen-3
+  size: small # tiny (<3B) | small (3-8B) | medium(8-21B) | large (21-70B) | x-large (>70B) / -thinking, -moe
+  framework: llama
+  url: "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+  sha256: "sha256:3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597"
+  dest_subdir: models/
