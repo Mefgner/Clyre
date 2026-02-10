@@ -11,13 +11,11 @@ from db import get_db_session
 from schemas.chatting import UserChatRequest, UserChatResponse
 from schemas.general import TokenPayload
 from services.chatting import ChattingService
-from services.connection import ConnectionService
 from utils import web
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
 chatting_sc = ChattingService()
-connection_sc = ConnectionService()
 chat_router = APIRouter(tags=["chatting"])
 
 
