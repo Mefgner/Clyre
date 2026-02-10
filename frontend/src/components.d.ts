@@ -11,24 +11,15 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AreYouShureDialog: typeof import('./components/chat/AreYouShureDialog.vue')['default']
     AreYouSureModal: typeof import('./components/chat/AreYouSureModal.vue')['default']
-    Chat: typeof import('./pages/chat.vue')['default']
     ChatAnswer: typeof import('./components/chat/ChatAnswer.vue')['default']
-    ChatBubble: typeof import('./components/chat/ChatBubble.vue')['default']
-    Login: typeof import('./components/auth/login.vue')['default']
     LoginModal: typeof import('./components/auth/LoginModal.vue')['default']
-    ModalBase: typeof import('./components/ModalBase.vue')['default']
     ModalContainer: typeof import('./components/ModalContainer.vue')['default']
     PrettyMarkdown: typeof import('./components/chat/PrettyMarkdown.vue')['default']
     PromptBar: typeof import('./components/chat/PromptBar.vue')['default']
-    QueryBar: typeof import('./components/chat/QueryBar.vue')['default']
-    Register: typeof import('./components/auth/register.vue')['default']
     RegisterModal: typeof import('./components/auth/RegisterModal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    UserProfile: typeof import('./components/auth/UserProfile.vue')['default']
-    UserProfileModal: typeof import('./components/auth/UserProfileModal.vue')['default']
     UserPromptBubble: typeof import('./components/chat/UserPromptBubble.vue')['default']
   }
 }
