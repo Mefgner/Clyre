@@ -1,4 +1,5 @@
 @use 'vuetify/settings' as v;
+@use 'sass:map' as map;
 
 .pretty-rendered {
   * {
@@ -36,34 +37,30 @@
     font-family: 'Fira Code', monospace;
   }
 
-  pre code {
-    overflow-clip: none;
-  }
-
   hr {
     border: 0;
-    border-top: 0.01rem solid map-get(v.$grey, 'darken-2');
+    border-top: 0.01rem solid map.get(v.$grey, 'darken-2');
     margin: 1rem 3px;
     opacity: 0.5;
   }
 
   table {
     border-collapse: collapse;
-    border: 0.01rem solid map-get(v.$grey, 'darken-3');
+    border: 0.01rem solid map.get(v.$grey, 'darken-3');
     border-radius: 1rem;
     width: 100%;
     margin: 0.8rem 0;
 
     thead {
-      border-bottom: 0.01rem solid map-get(v.$grey, 'darken-3');
+      border-bottom: 0.01rem solid map.get(v.$grey, 'darken-3');
     }
 
     td, th {
-      border-right: 0.01rem solid map-get(v.$grey, 'darken-3');
+      border-right: 0.01rem solid map.get(v.$grey, 'darken-3');
     }
 
     td {
-      border-bottom: 0.01rem solid map-get(v.$grey, 'darken-4');
+      border-bottom: 0.01rem solid map.get(v.$grey, 'darken-4');
     }
 
     tr:last-child td {
