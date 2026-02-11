@@ -26,11 +26,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# TODO: refactor CRUD ops, make 1 to 3 but more configurable crud function to get a Model
-
-# TODO: refactor service function to make them more simple and less god-like.
-
-# TODO: a initial way to compress chat history.
-
-# TODO: try to make less abstractions while generating completion.
