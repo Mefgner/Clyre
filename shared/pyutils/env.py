@@ -1,5 +1,8 @@
+import logging
+
 from pydantic_settings import BaseSettings
-from utils.base import get_app_root_dir
+
+from shared.pyutils.base import get_app_root_dir
 
 
 def env_file():
@@ -21,13 +24,14 @@ class Settings(BaseSettings):
     # Backend configuration
     DB_ENGINE: str = "sqlite"
     DB_RUNTIME: str = "aiosqlite"
-    DB_PATH: str = "./data/clyre.sqlite3"
+    DESKTOP_DB_PATH: str = "./data/clyre.sqlite3"
+    DATABASE_URL: str | None = None
 
     # Hashing
     HASHING_SECRET: str = "your_secret_key_here"
     ACCESS_TOKEN_SECRET: str = "your_secret_key_here"
     REFRESH_TOKEN_SECRET: str = "your_secret_key_here"
-    SERVICE_SECRET: str = "forbidden"
+    # SERVICE_SECRET: str = "forbidden"  # Deprecated telegram bot access
     ACCESS_TOKEN_DUR_MINUTES: int = 15
     REFRESH_TOKEN_DUR_DAYS: int = 15
 
@@ -35,14 +39,22 @@ class Settings(BaseSettings):
     LLAMA_WIN_HOST: str = "localhost"
     LLAMA_WIN_PORT: int = 6760
     LLAMA_URL: str = "http://localhost:6760"
+    LLAMA_MODEL_NAME: str = ""
 
     # Vector config
-    VECTOR_DB: str = "faiss"
     VECTOR_DIM: int = 512
-    VECTOR_PATH: str = "./data/vectors"
-    NORMALIZE_VECTORS: bool = False
-    DISTANCE: str = "cosine"
+    DESKTOP_VECTOR_PATH: str = "./data/vectors"
+    VECTOR_URL: str | None = None
+    NORMALIZE_VECTORS: bool = True
+    
 
     class Config:
         env_file = env_file()
         extra = "ignore"
+
+
+def get_logging_level() -> int:
+    return logging.DEBUG if Settings().DEBUG else logging.INFO
+
+
+__all__ = ["Settings", "env_file", "get_logging_level"]

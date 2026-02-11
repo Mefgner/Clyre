@@ -5,8 +5,8 @@ from pathlib import Path
 import pooch
 import yaml
 
-import utils.base
-from utils import cfg
+from shared.pyutils.base import get_app_root_dir
+from scripts.utils import cfg
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
@@ -27,7 +27,7 @@ def shorter_path_repr(path: Path | str) -> str:
     return path
 
 
-def _download_from_config(item_to_download: dict[str, str]) -> str | list[str]:
+def download_from_config(item_to_download: dict[str, str]) -> str | list[str]:
     url = item_to_download["url"]
     sha256 = item_to_download["sha256"].split(":")[1]
     dest_subdir = item_to_download["dest_subdir"]
@@ -61,22 +61,28 @@ def _download_from_config(item_to_download: dict[str, str]) -> str | list[str]:
     )
 
 
-def predownload(*files: str) -> list[str]:
-    all_downloads = []
+def from_yaml(config_path: Path) -> list[str]:
+    with open(config_path, encoding="utf-8") as file:
+        files_to_download: list[dict[str, str]] = yaml.load(file, Loader=yaml.FullLoader)
+
+    all_downloads: list[str] = []
+    for item in files_to_download:
+        downloaded = download_from_config(item)
+        if isinstance(downloaded, list):
+            all_downloads.extend(downloaded)
+        else:
+            all_downloads.append(downloaded)
+    return all_downloads
+
+
+def from_files(*files: str) -> list[str]:
+    all_downloads: list[str] = []
 
     for config_file in files:
-        with open(
-            utils.base.get_app_root_dir() / "configs" / config_file, encoding="utf-8"
-        ) as file:
-            files_to_download: list[dict[str, str]] = yaml.load(
-                file.read(), Loader=yaml.FullLoader
-            )
-
-            for download in files_to_download:
-                file = _download_from_config(download)
-                all_downloads += file
+        config_path = get_app_root_dir() / "configs" / config_file
+        all_downloads.extend(from_yaml(config_path))
 
     return all_downloads
 
 
-__all__ = ["predownload"]
+__all__ = ["download_from_config", "from_yaml", "from_files"]

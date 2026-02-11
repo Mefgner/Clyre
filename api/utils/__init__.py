@@ -1,4 +1,3 @@
-from . import env
+from shared.pyutils.env import Settings
 
-Settings = env.Settings
 env = Settings()

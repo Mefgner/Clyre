@@ -1,15 +1,11 @@
 import asyncio
 import json
 import logging
-import os
-import subprocess
-from pathlib import Path
-from subprocess import Popen
 from typing import Any, AsyncGenerator
 
 import httpx
 
-from utils import cfg, env
+from utils import env
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
@@ -18,53 +14,20 @@ LLAMA_URL = env.LLAMA_URL
 
 
 class LlamaLLMPipeline:
-    is_running = False
-    __process: Popen | None = None
     __current_model: str | None = None
 
     def __init__(
         self,
         llama_url: str,
         model_name: str,
-        model_path: str | Path,
-        executable_path: os.PathLike,
-        is_in_docker: bool = False,
     ):
         Logger.info("Initializing LlamaLLMPipeline")
         self.__llama_url = llama_url
         self.__current_model = self.__model_name = model_name
-        self.__model_path = model_path
-        self.__executable_path = executable_path
-        self.__is_in_docker = is_in_docker
-
-        self._startup()
 
     @property
     def current_model(self):
         return self.__current_model
-
-    def _startup(self):
-        if not self.__is_in_docker:
-            Logger.info("Starting Llama.cpp executable")
-            self.__process = subprocess.Popen(
-                [
-                    self.__executable_path,
-                    "--model",
-                    self.__model_path,
-                    "--host",
-                    env.LLAMA_WIN_HOST,
-                    "--port",
-                    str(env.LLAMA_WIN_PORT),
-                    "-ngl",
-                    "40",
-                    "--jinja",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            Logger.info("Started Llama.cpp executable with pid %d", self.__process.pid)
-
-        self.is_running = True
 
     @staticmethod
     async def wait_for_startup():
@@ -155,38 +118,17 @@ class LlamaLLMPipeline:
                         Logger.error("Failed to decode JSON from Llama.cpp response (%s)", line)
                         continue
 
-    def close(self):
-        Logger.info("Shutting down Llama.cpp executable")
-        if self.__process:
-            self.__process.terminate()
-            self.__process.wait()
-            self.is_running = False
-            self.__process = None
-
-    def __del__(self):
-        self.close()
-
 
 llama_instance: LlamaLLMPipeline | None = None
 
 
 def get_llama_pipeline(
     model_name: str | None = None,
-    executable_path: Path | None = None,
-    is_in_docker: bool = False,
 ) -> LlamaLLMPipeline:
     if not model_name:
-        model_name = cfg.get_default_llama_model_name()
-    if not executable_path:
-        executable_path = cfg.get_default_llama_executable()
+        model_name = env.LLAMA_MODEL_NAME or "default"
 
-    setup_payload = (
-        LLAMA_URL,
-        model_name,
-        cfg.resolve_llama_model_path(model_name),
-        executable_path,
-        is_in_docker,
-    )
+    setup_payload = (LLAMA_URL, model_name)
 
     global llama_instance
 

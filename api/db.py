@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from models import Base
-from utils import cfg, env
+from utils import env
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
@@ -19,10 +19,11 @@ Logger.setLevel(logging.INFO)
 class AsyncSessionManager:
     def __init__(self, echo: bool = False):
         Logger.info("Initializing database engine")
-        self._db_base = f"{env.DB_ENGINE}+{env.DB_RUNTIME}://"
-        if env.DB_ENGINE == "sqlite":
-            self._db_base += "/"
-        self._db_url = f"{self._db_base}{cfg.get_resolved_db_path().as_posix()}"
+        self._db_url = env.DATABASE_URL
+
+        if not self._db_url:
+            raise ValueError("DATABASE_URL is not configured")
+
         self._engine: AsyncEngine = create_async_engine(self._db_url, echo=echo, future=True)
         self._session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self._engine,
