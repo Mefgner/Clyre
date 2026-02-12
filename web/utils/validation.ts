@@ -10,7 +10,7 @@ const passwordStrengthRegexNumber = /\d/
 const passwordStrengthRegexSpecialChar = /\W/
 
 export function validateRegisterCredentials (username: string, email: string, password: string, second_password: string): string | null {
-  if (username.length < 31 && username.length > 3) {
+  if (username.length > 31 || username.length < 3) {
     return 'Username must be between 3 and 30 characters long.'
   }
 
