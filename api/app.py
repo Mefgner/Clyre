@@ -44,7 +44,7 @@ app.include_router(views.api_router, prefix="/api")
 @app.exception_handler(Exception)
 async def handle_exception(request, exc):
     Logger.error("Unhandled exception: \n%s\n\n Request: %s", exc, request, exc_info=True)
-    raise exc
+    return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 # DB engine startup side effect
