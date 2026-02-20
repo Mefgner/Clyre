@@ -1,6 +1,8 @@
 import logging
 from fastapi import FastAPI
-from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
+
+# from starlette.middleware.cors import CORSMiddleware
 
 import db
 from routes import views
@@ -23,20 +25,20 @@ Logger.info("Pre-downloading necessary files...")
 app = FastAPI(title="Clyre API", version=env.CLYRE_VERSION)
 app.include_router(views.api_router, prefix="/api")
 
-origins = [
-    "http://localhost",
-    "http://localhost:3000",
-    "http://0.0.0.0",
-    "http://192.168.137.1:3000",
-]
+# origins = [
+#     "http://localhost",
+#     "http://localhost:3000",
+#     "http://0.0.0.0",
+#     "http://192.168.137.1:3000",
+# ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=origins,
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 
 @app.exception_handler(Exception)

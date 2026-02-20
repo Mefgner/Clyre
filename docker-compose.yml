@@ -1,0 +1,82 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      HOST: 0.0.0.0
+      PORT: 6750
+      DEBUG: False
+      DATABASE_URL: postgresql+asyncpg://clyre:clyre_secret@db:5432/clyre
+      HASHING_SECRET: ${HASHING_SECRET:?}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?}
+      ACCESS_TOKEN_DUR_MINUTES: 15
+      REFRESH_TOKEN_DUR_DAYS: 15
+      LLAMA_URL: http://llama:6760
+      PRIMARY_MODEL_NAME: ${PRIMARY_MODEL_ALIAS:-model}
+      PRIMARY_MODEL_SIZE: small
+    depends_on:
+      - db
+      - llama
+    ports:
+      - "6750:6750"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: /api
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clyre
+      POSTGRES_PASSWORD: clyre_secret
+      POSTGRES_DB: clyre
+    volumes:
+      - clyre_pgdata:/var/lib/postgresql/data
+
+  llama:  
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    environment:
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: 6760
+      # Model auto-download from HuggingFace
+      # HF_HUB_OFFLINE: 1
+      # LLAMA_ARG_ALIAS: ${PRIMARY_MODEL_ALIAS:-model}
+      LLAMA_ARG_HF_REPO: ${PRIMARY_MODEL_HF:-}
+      # LLAMA_ARG_HF_FILE: ${PRIMARY_MODEL_FILE:-}
+      # Inference settings
+      LLAMA_ARG_CTX_SIZE: 4096
+      LLAMA_ARG_N_GPU_LAYERS: 99
+      LLAMA_ARG_BATCH: 1024
+      LLAMA_ARG_UBATCH: 512
+      LLAMA_ARG_FLASH_ATTN: "on"
+    volumes:
+      # HF cache persists downloaded models across restarts
+      - llama_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "6760:6760"
+
+  # qdrant:
+  #   image: qdrant/qdrant:latest
+  #   volumes:
+  #     - clyre_qdrant:/qdrant/storage
+
+volumes:
+  clyre_pgdata:
+  llama_cache:
+  # clyre_qdrant:

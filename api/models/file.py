@@ -113,8 +113,8 @@ class File(Base):
 class FileHasThread(Base):
     __tablename__ = "file_has_thread"
 
-    file_id = mapped_column(Integer, ForeignKey("file.id"), primary_key=True)
-    thread_id = mapped_column(Integer, ForeignKey("thread.id"), primary_key=True)
+    file_id = mapped_column(String(36), ForeignKey("file.id"), primary_key=True)
+    thread_id = mapped_column(String(36), ForeignKey("thread.id"), primary_key=True)
 
     file = relationship("File", back_populates="thread_links")
     thread = relationship("Thread", back_populates="file_links")
@@ -123,8 +123,8 @@ class FileHasThread(Base):
 class FileHasProject(Base):
     __tablename__ = "file_has_project"
 
-    file_id = mapped_column(Integer, ForeignKey("file.id"), primary_key=True)
-    project_id = mapped_column(Integer, ForeignKey("project.id"), primary_key=True)
+    file_id = mapped_column(String(36), ForeignKey("file.id"), primary_key=True)
+    project_id = mapped_column(String(36), ForeignKey("project.id"), primary_key=True)
 
     file = relationship("File", back_populates="project_links")
     project = relationship("Project", back_populates="file_links")
