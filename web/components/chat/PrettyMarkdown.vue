@@ -17,8 +17,8 @@
     const link = document.createElement('link')
     link.rel = 'stylesheet'
     link.href = theme.current.value.dark
-      ? import.meta.env.VITE_HLJS_DARK_STYLE_URL
-      : import.meta.env.VITE_HLJS_LIGHT_STYLE_URL
+      ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/agate.min.css'
+      : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css'
 
     document.head.append(link)
     currentStyleLink = link
