@@ -69,8 +69,10 @@ async def stream_response(
         background_tasks.add_task(after_generation_task, session)
 
         return StreamingResponse(generator, media_type="application/x-ndjson")
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Thread not found")
+    except Exception:
+        raise
 
 
 # @chat_router.post("/telegram-response")
