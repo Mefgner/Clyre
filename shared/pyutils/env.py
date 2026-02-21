@@ -9,7 +9,9 @@ def env_file():
     prod_env = get_app_root_dir() / ".env"
     if prod_env.exists():
         return prod_env
-    return get_app_root_dir() / "configs" / "base.env"
+    raise FileNotFoundError(
+        f"Environment file not found at {prod_env}. Please create a .env file with the required configuration."
+    )
 
 
 class Settings(BaseSettings):
@@ -60,4 +62,4 @@ def get_logging_level() -> int:
     return logging.DEBUG if Settings().DEBUG else logging.INFO
 
 
-__all__ = ["Settings", "env_file", "get_logging_level"]
+__all__ = ["Settings", "get_logging_level"]
