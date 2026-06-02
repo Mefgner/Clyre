@@ -66,7 +66,7 @@ class AuthService:
     async def login_locally(self, session: AsyncSession, password: str, email: str):
         conn = await get_local_conn_by_email(session, email)
 
-        if not hashing.verify_password(conn.password_hash, password):
+        if not conn or not hashing.verify_password(conn.password_hash, password):
             raise ValueError("Invalid credentials")
 
         payload = self.build_payload(conn.user_id)
