@@ -32,7 +32,6 @@
   "js/ts.tsdk.path": "node_modules/typescript/lib",
 
   "python.analysis.diagnosticMode": "workspace",
-  "python.analysis.typeCheckingMode": "basic",
   "python.analysis.autoImportCompletions": true,
 
   "ruff.enable": true,
