@@ -1,4 +1,5 @@
 import logging
+from typing import TYPE_CHECKING, Any
 
 from pydantic_settings import BaseSettings
 from shared.pyutils.base import get_app_root_dir
@@ -52,6 +53,11 @@ class Settings(BaseSettings):
     class Config:
         env_file = env_file()
         extra = "ignore"
+
+    if TYPE_CHECKING:
+        # Fields are populated from the environment / .env at runtime; this stub
+        # tells the type checker no constructor arguments are required.
+        def __init__(self, **kwargs: Any) -> None: ...
 
 
 def get_logging_level() -> int:
