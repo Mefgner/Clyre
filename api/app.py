@@ -5,6 +5,7 @@ from starlette.responses import JSONResponse
 # from starlette.middleware.cors import CORSMiddleware
 
 import db
+from crud.vector import get_vector_repository
 from routes import views
 from pipelines import llama
 from utils import env
@@ -51,6 +52,16 @@ async def handle_exception(request, exc):
 
 app.add_event_handler("startup", db.get_session_manager().init_models)
 app.add_event_handler("shutdown", db.get_session_manager().close)
+
+
+# Vector store schema (lives outside the ORM; created by the VectorRepository)
+
+
+async def _ensure_vector_schema():
+    await get_vector_repository().ensure_schema(db.get_session_manager().async_engine)
+
+
+app.add_event_handler("startup", _ensure_vector_schema)
 
 # Llama.cpp connection side effect
 
