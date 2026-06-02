@@ -1,0 +1,19 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": ["api", "."],
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.11",
+  "include": ["api", "tests", "scripts", "shared"],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "web",
+    "dist",
+    "build",
+    "telegram-bot",
+    "public",
+    "configs",
+    ".venv"
+  ]
+}
