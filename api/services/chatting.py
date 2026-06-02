@@ -12,6 +12,7 @@ from crud import (
     update_thread_time,
 )
 from crud.message import get_last_message_order_in_thread
+from db import get_session_manager
 from models import Message, Thread
 from pipelines.llama import get_llama_pipeline
 from schemas.chatting import StreamingBlock
@@ -209,12 +210,18 @@ class ChattingService:
                 + "\n"
             )
 
-        async def background_task(__session: AsyncSession):
-            try:
-                await save_assistant_response(__session)
-            except Exception as e:
-                Logger.error(
-                    "Error in background_task for thread_id: %s, error: %s", thread_id, str(e)
-                )
+        async def background_task():
+            if is_assistant_message_saved:
+                return
+
+            async with get_session_manager().async_session_maker() as fresh_session:
+                try:
+                    await save_assistant_response(fresh_session)
+                except Exception as e:
+                    Logger.error(
+                        "Error in background_task for thread_id: %s, error: %s",
+                        thread_id,
+                        str(e),
+                    )
 
         return stream_response_accumulator(), background_task

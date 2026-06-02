@@ -66,7 +66,7 @@ async def stream_response(
             session, thread_id, user_id, message, starlette_request.is_disconnected
         )
 
-        background_tasks.add_task(after_generation_task, session)
+        background_tasks.add_task(after_generation_task)
 
         return StreamingResponse(generator, media_type="application/x-ndjson")
     except ValueError:
