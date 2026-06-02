@@ -1,3 +1,4 @@
 from shared.pyutils.env import Settings
 
-env = Settings()
+# Required fields are populated from the environment / .env, which pyright can't model.
+env = Settings()  # pyright: ignore[reportCallIssue]

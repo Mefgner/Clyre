@@ -1,6 +1,7 @@
 import hashlib
 import uuid
 from datetime import datetime, timedelta
+from typing import Any
 
 import argon2
 import jwt
@@ -52,9 +53,9 @@ def create_jwt(
     return tk
 
 
-def verify_jwt(token: str, secret: str) -> dict[str, str | float]:
+def verify_jwt(token: str, secret: str) -> dict[str, Any]:
     try:
-        payload: dict[str, str | float] = jwt.decode(token, secret, algorithms=("HS256",))
+        payload: dict[str, Any] = jwt.decode(token, secret, algorithms=("HS256",))
         return payload
     except jwt.PyJWTError as exc:
         raise ValueError("Invalid token") from exc

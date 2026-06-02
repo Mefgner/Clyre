@@ -115,7 +115,7 @@ class ChattingService:
     async def stream_response(
         self,
         session: AsyncSession,
-        thread_id: str,
+        thread_id: str | None,
         user_id: str,
         message: str,
         get_stop_signal: Callable[[], Awaitable[bool]],
