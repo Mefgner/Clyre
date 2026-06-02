@@ -35,7 +35,7 @@ async def get_last_message_in_thread(
 ) -> Message | None:
     last_one = await session.scalar(
         select(Message)
-        .where(Message.thread_id == thread_id and Message.user_id == user_id)
+        .where(Message.thread_id == thread_id, Message.user_id == user_id)
         .order_by(Message.order.desc())
         .limit(1)
     )
@@ -68,7 +68,7 @@ async def get_message_by_id(
     session: AsyncSession, message_id: str, user_id: str
 ) -> Message | None:
     result = await session.execute(
-        select(Message).where(Message.id == message_id and Message.user_id == user_id)
+        select(Message).where(Message.id == message_id, Message.user_id == user_id)
     )
     return result.scalars().first()
 
