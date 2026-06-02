@@ -14,7 +14,7 @@ class User(Base):
     #     "TelegramConnection", back_populates="user", cascade="all, delete-orphan"
     # )
 
-    files = relationship("File", back_populates="user", cascade="all, delete-orphan")
+    files = relationship("FileMetadata", back_populates="user", cascade="all, delete-orphan")
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
     threads = relationship("Thread", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
