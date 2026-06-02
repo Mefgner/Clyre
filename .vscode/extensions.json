@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "vue.volar",
+    "dbaeumer.vscode-eslint",
+    "usernamehw.errorlens",
+    "yoavbls.pretty-ts-errors",
+    "redhat.vscode-yaml",
+    "ms-azuretools.vscode-containers",
+    "gruntfuggly.todo-tree",
+  ]
+}

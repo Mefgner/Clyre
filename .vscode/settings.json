@@ -1,0 +1,64 @@
+{
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.fixAll.ruff": "explicit",
+    "source.organizeImports": "explicit"
+  },
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.ruff_cache": true,
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/node_modules": true,
+    "**/dist": true
+  },
+  "search.exclude": {
+    "**/__pycache__": true,
+    "**/.ruff_cache": true,
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.venv": true
+  },
+
+  "eslint.useFlatConfig": true,
+  "eslint.validate": ["javascript", "typescript", "vue", "json", "jsonc"],
+
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+
+  "ruff.enable": true,
+
+  "eslint.format.enable": true,
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "[vue]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "never",
+      "source.organizeImports": "never"
+    }
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  }
+}
