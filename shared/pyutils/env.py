@@ -1,7 +1,6 @@
 import logging
 
 from pydantic_settings import BaseSettings
-
 from shared.pyutils.base import get_app_root_dir
 
 
@@ -9,9 +8,6 @@ def env_file():
     prod_env = get_app_root_dir() / ".env"
     if prod_env.exists():
         return prod_env
-    raise FileNotFoundError(
-        f"Environment file not found at {prod_env}. Please create a .env file with the required configuration."
-    )
 
 
 class Settings(BaseSettings):
