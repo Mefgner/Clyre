@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { onUnmounted, onUpdated, useTemplateRef, watch } from 'vue'
+  import { onUnmounted, useTemplateRef, watch } from 'vue'
   import { useThreadStore } from '@/stores/thread.ts'
 
   const threadStore = useThreadStore()
@@ -13,8 +13,9 @@
     threadStore.setCurrentThread(threadMeta)
   }, { immediate: true })
 
-  onUpdated(() => {
-    chatHistoryFooter.value?.scrollIntoView()
+  watch(() => threadStore.currentThread.messages, () => {
+    if (!chatHistoryFooter.value) return
+    chatHistoryFooter.value.scrollIntoView({ behavior: 'smooth' })
   })
 
   onUnmounted(() => {
