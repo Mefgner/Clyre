@@ -9,7 +9,10 @@ class FileMetadata(Base):
 
     user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
     name = mapped_column(String(255), nullable=False)
-    head_value = mapped_column(String(128), nullable=False)
+    content_type = mapped_column(String(255), nullable=False)
+    # Short text preview (first chars of decoded content) for UI hover; NULL for
+    # binary or non-decodable files.
+    head_value = mapped_column(String(128), nullable=True)
     creation_date = mapped_column(Date, nullable=True)
     # NULL until the file is promoted to the workspace KB — only then is it embedded.
     workspace_id = mapped_column(String(36), nullable=True, index=True)
@@ -21,12 +24,8 @@ class FileMetadata(Base):
     project_links = relationship(
         "FileHasProject", back_populates="file", cascade="all, delete-orphan"
     )
-    keywords = relationship(
-        "FileKeyword", back_populates="file", cascade="all, delete-orphan"
-    )
-    chunks = relationship(
-        "ChunkVector", back_populates="file", cascade="all, delete-orphan"
-    )
+    keywords = relationship("FileKeyword", back_populates="file", cascade="all, delete-orphan")
+    chunks = relationship("ChunkVector", back_populates="file", cascade="all, delete-orphan")
 
 
 class FileHasThread(Base):

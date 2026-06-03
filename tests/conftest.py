@@ -61,7 +61,11 @@ def seeder(session, repo):
         session.add(user)
         await session.flush()
         f = FileMetadata(
-            user_id=user.id, name="d.txt", head_value="h", workspace_id=workspace_id
+            user_id=user.id,
+            name="d.txt",
+            content_type="text/plain",
+            head_value="h",
+            workspace_id=workspace_id,
         )
         session.add(f)
         await session.flush()
