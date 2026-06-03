@@ -164,8 +164,15 @@ _repository: VectorRepository | None = None
 def get_vector_repository() -> VectorRepository:
     global _repository
     if _repository is None:
-        _repository = SqliteVecRepository() if env.DB_ENGINE == "sqlite" else PgVectorRepository()
+        _repository = (
+            SqliteVecRepository() if env.DB_ENGINE == "sqlite" else PgVectorRepository()
+        )
     return _repository
 
 
-__all__ = ["VectorRepository", "SqliteVecRepository", "PgVectorRepository", "get_vector_repository"]
+__all__ = [
+    "VectorRepository",
+    "SqliteVecRepository",
+    "PgVectorRepository",
+    "get_vector_repository",
+]
