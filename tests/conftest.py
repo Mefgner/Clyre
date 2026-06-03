@@ -5,6 +5,7 @@ import uuid
 # Force a small, isolated SQLite config before any api module imports Settings().
 os.environ["DB_ENGINE"] = "sqlite"
 os.environ["VECTOR_DIM"] = "8"
+os.environ["NORMALIZE_VECTORS"] = "true"
 os.environ.setdefault("HASHING_SECRET", "test")
 os.environ.setdefault("ACCESS_TOKEN_SECRET", "test")
 os.environ.setdefault("REFRESH_TOKEN_SECRET", "test")

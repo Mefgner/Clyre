@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     LLAMA_URL: str = "http://localhost:6760"
     LLAMA_MODEL_NAME: str | None = None
 
+    # Embedding inference (second llama-server)
+    EMBEDDING_BASE_URL: str = "http://localhost:6761"
+    EMBEDDING_MODEL: str = "Qwen3-Embedding-0.6B"
+
     # Orchestrator configuration
     PRIMARY_MODEL_NAME: str | None = None
     PRIMARY_MODEL_SIZE: str | None = None
