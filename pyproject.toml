@@ -24,7 +24,8 @@ dependencies = [
     "uvicorn (>=0.37.0,<0.38.0)",
     "colorlog (>=6.10.1,<7.0.0)",
     "pgvector (>=0.4.2,<0.5.0)",
-    "sqlite-vec (>=0.1.9,<0.2.0)"
+    "sqlite-vec (>=0.1.9,<0.2.0)",
+    "python-multipart (>=0.0.20,<0.1.0)"
 ]
 
 #[build-system]
@@ -48,6 +49,9 @@ dev = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = [".", "api"]
+markers = [
+    "e2e: requires external PostgreSQL and/or llama-server services",
+]
 
 [tool.black]
 line-length = 96
@@ -71,7 +75,7 @@ exclude = '''
 [tool.ruff]
 line-length = 96
 target-version = "py311"
-src = ["api"]
+src = ["api", "shared", "scripts"]
 exclude = [
     "web",
     "node_modules",
@@ -82,3 +86,9 @@ exclude = [
     "dist",
     "build",
 ]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["api", "shared", "scripts"]
