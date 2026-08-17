@@ -20,10 +20,12 @@ class LlamaLLMPipeline:
         self,
         llama_url: str,
         model_name: str,
+        transport: httpx.AsyncBaseTransport | None = None,
     ):
         Logger.info("Initializing LlamaLLMPipeline")
         self.__llama_url = llama_url
         self.__current_model = self.__model_name = model_name
+        self.__transport = transport
 
     @property
     def current_model(self):
@@ -65,7 +67,7 @@ class LlamaLLMPipeline:
     ):
         payload = self._build_payload(history, max_tokens, temperature, stream=False)
         link = f"{self.__llama_url}/v1/chat/completions"
-        async with httpx.AsyncClient(timeout=100.0) as client:
+        async with httpx.AsyncClient(timeout=100.0, transport=self.__transport) as client:
             response = await client.post(link, json=payload)
             response.raise_for_status()
             response_json = response.json()
@@ -85,7 +87,7 @@ class LlamaLLMPipeline:
     ) -> AsyncGenerator[str, None]:
         payload = self._build_payload(history, max_tokens, temperature, stream=True)
         link = f"{self.__llama_url}/v1/chat/completions"
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, transport=self.__transport) as client:
             async with client.stream("POST", link, json=payload) as stream:
                 async for line in stream.aiter_lines():
                     try:
@@ -117,6 +119,22 @@ class LlamaLLMPipeline:
                     except json.JSONDecodeError:
                         Logger.error("Failed to decode JSON from Llama.cpp response (%s)", line)
                         continue
+
+    async def count_tokens_many(self, texts: list[str]) -> list[int]:
+        """Count tokens through llama-server without approximating them locally."""
+        if not texts:
+            return []
+
+        async with httpx.AsyncClient(timeout=60.0, transport=self.__transport) as client:
+            responses = await asyncio.gather(
+                *(
+                    client.post(f"{self.__llama_url}/tokenize", json={"content": text})
+                    for text in texts
+                )
+            )
+        for response in responses:
+            response.raise_for_status()
+        return [len(response.json()["tokens"]) for response in responses]
 
 
 llama_instance: LlamaLLMPipeline | None = None
