@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: clyre_e2e
+      POSTGRES_PASSWORD: clyre_e2e
+      POSTGRES_DB: clyre_e2e
+    ports:
+      - "55432:5432"
+    volumes:
+      - clyre_e2e_pgdata:/var/lib/postgresql/data
+
+  embedding:
+    image: ${E2E_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    environment:
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: 6761
+      LLAMA_ARG_HF_REPO: Qwen/Qwen3-Embedding-0.6B-GGUF
+      LLAMA_ARG_HF_FILE: Qwen3-Embedding-0.6B-Q8_0.gguf
+      LLAMA_ARG_EMBEDDINGS: "true"
+      LLAMA_ARG_ALIAS: Qwen3-Embedding-0.6B
+      LLAMA_ARG_CTX_SIZE: 2048
+      LLAMA_ARG_BATCH: 512
+      LLAMA_ARG_UBATCH: 256
+      LLAMA_ARG_N_GPU_LAYERS: ${E2E_N_GPU_LAYERS:-0}
+      LLAMA_ARG_FLASH_ATTN: "off"
+    ports:
+      - "6761:6761"
+    volumes:
+      - clyre_e2e_llama_cache:/root/.cache
+
+volumes:
+  clyre_e2e_pgdata:
+  clyre_e2e_llama_cache:
