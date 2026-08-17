@@ -2,6 +2,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic_settings import BaseSettings
+
 from shared.pyutils.base import get_app_root_dir
 
 
@@ -52,10 +53,12 @@ class Settings(BaseSettings):
     PRIMARY_MODEL_SIZE: str | None = None
 
     # Vector config
-    VECTOR_DIM: int = 512
+    VECTOR_DIM: int = 1024
     DESKTOP_VECTOR_DB_PATH: str = "./data/vectors"
     VECTOR_DB_URL: str | None = None
     NORMALIZE_VECTORS: bool = True
+    CHUNK_SIZE: int = 1500
+    CHUNK_OVERLAP: int = 200
 
     class Config:
         env_file = env_file()
