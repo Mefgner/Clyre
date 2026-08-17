@@ -1,15 +1,15 @@
 import logging
+
 from fastapi import FastAPI
 from starlette.responses import JSONResponse
 
 # from starlette.middleware.cors import CORSMiddleware
-
 import db
 from crud.vector import get_vector_repository
-from routes import views
 from pipelines import llama
-from utils import env
+from routes import views
 from shared.pyutils.logs import setup_logging
+from utils import env
 
 # Set up logging
 

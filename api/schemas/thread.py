@@ -1,8 +1,7 @@
 import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, Field
-from pydantic import UUID4
+from pydantic import UUID4, BaseModel, Field
 
 
 class GetAllThreadsRequest(BaseModel):

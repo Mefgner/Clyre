@@ -1,4 +1,4 @@
-from sqlalchemy import Date, TIMESTAMP, ForeignKey, SmallInteger, String, func
+from sqlalchemy import TIMESTAMP, Date, ForeignKey, SmallInteger, String, func
 from sqlalchemy.orm import mapped_column, relationship
 
 from models import Base

@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models import LocalConnection, User
 from utils import hashing
 
-
 #
 # Create
 #

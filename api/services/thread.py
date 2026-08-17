@@ -1,8 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from crud import (
-    get_thread_by_id,
     get_all_user_threads,
+    get_thread_by_id,
     get_user_by_id,
 )
 from crud.thread import delete_thread

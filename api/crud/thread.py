@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import contains_eager
 
-from models import Thread, Message
+from models import Message, Thread
 from utils import hashing
 
 

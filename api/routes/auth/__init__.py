@@ -1,1 +1,0 @@
-from . import views as auth_views

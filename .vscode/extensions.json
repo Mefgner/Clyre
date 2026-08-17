@@ -9,7 +9,6 @@
     "usernamehw.errorlens",
     "yoavbls.pretty-ts-errors",
     "redhat.vscode-yaml",
-    "ms-azuretools.vscode-containers",
-    "gruntfuggly.todo-tree",
+    "ms-azuretools.vscode-containers"
   ]
 }

@@ -3,8 +3,8 @@ import subprocess
 from pathlib import Path
 from subprocess import Popen
 
-from shared.pyutils.env import Settings
 from scripts.utils import cfg
+from shared.pyutils.env import Settings
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)

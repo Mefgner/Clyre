@@ -5,8 +5,8 @@ from pathlib import Path
 import pooch
 import yaml
 
-from shared.pyutils.base import get_app_root_dir
 from scripts.utils import cfg
+from shared.pyutils.base import get_app_root_dir
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)

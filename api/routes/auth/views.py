@@ -1,20 +1,20 @@
-import re
 import logging
+import re
 from typing import Annotated
 
-from email_validator import validate_email, EmailNotValidError
+from email_validator import EmailNotValidError, validate_email
 from fastapi import APIRouter, HTTPException, Response
-from fastapi.params import Depends, Body
+from fastapi.params import Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import get_db_session
 from schemas.auth import (
-    UserLoginRequest,
-    UserRegisterRequest,
+    LoginResponse,
     LogoutResponse,
     RefreshResponse,
     RegisterResponse,
-    LoginResponse,
+    UserLoginRequest,
+    UserRegisterRequest,
 )
 from schemas.general import TokenPayload
 from services.auth import AuthService
