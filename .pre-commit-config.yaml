@@ -13,16 +13,16 @@ repos:
       - id: trailing-whitespace
       - id: check-added-large-files
 
-  # Revs pinned to match pyproject constraints (ruff <0.14, black <26) so the
-  # hook and `poetry run` agree. Bump together with pyproject, not via autoupdate.
+  # Keep hook versions aligned with the Poetry lockfile. Bump together with
+  # pyproject/poetry.lock, not via autoupdate.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.0
+    rev: v0.13.3
     hooks:
       - id: ruff
         args: [--fix]
 
   - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 25.1.0
+    rev: 25.12.0
     hooks:
       - id: black
 
@@ -30,8 +30,14 @@ repos:
     hooks:
       - id: pyright
         name: pyright (whole project)
-        entry: npx -y pyright
+        entry: npx -y pyright@1.1.413
         language: system
         types_or: [python, pyi]
         pass_filenames: false
         args: ["-p", "pyrightconfig.json"]
+      - id: pytest
+        name: pytest (unit tests)
+        entry: poetry run pytest
+        language: system
+        pass_filenames: false
+        always_run: true
