@@ -1,4 +1,4 @@
-from sqlalchemy import Date, ForeignKey, String, Integer
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import mapped_column, relationship
 
 from models import Base
@@ -14,8 +14,11 @@ class FileMetadata(Base):
     # binary or non-decodable files.
     head_value = mapped_column(String(128), nullable=True)
     creation_date = mapped_column(Date, nullable=True)
-    # NULL until the file is promoted to the workspace KB — only then is it embedded.
-    workspace_id = mapped_column(String(36), nullable=True, index=True)
+    # NULL until the file is linked into a project's index — only then is it embedded.
+    project_id = mapped_column(String(36), nullable=True, index=True)
+    index_status = mapped_column(String(16), nullable=False, default="not_indexed", index=True)
+    index_error = mapped_column(Text, nullable=True)
+    indexed_at = mapped_column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="files")
     thread_links = relationship(
@@ -24,7 +27,6 @@ class FileMetadata(Base):
     project_links = relationship(
         "FileHasProject", back_populates="file", cascade="all, delete-orphan"
     )
-    keywords = relationship("FileKeyword", back_populates="file", cascade="all, delete-orphan")
     chunks = relationship("ChunkVector", back_populates="file", cascade="all, delete-orphan")
 
 
@@ -56,20 +58,6 @@ class FileHasProject(Base):
     project = relationship("Project", back_populates="file_links")
 
 
-class FileKeyword(Base):
-    __tablename__ = "file_keyword"
-
-    file_id = mapped_column(
-        String(36),
-        ForeignKey("file_metadata.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    keyword = mapped_column(String(40), nullable=False)
-
-    file = relationship("FileMetadata", back_populates="keywords")
-
-
 class ChunkVector(Base):
     __tablename__ = "chunk_vector"
 
@@ -94,6 +82,5 @@ __all__ = [
     "FileMetadata",
     "FileHasThread",
     "FileHasProject",
-    "FileKeyword",
     "ChunkVector",
 ]
