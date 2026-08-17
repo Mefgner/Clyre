@@ -4,7 +4,7 @@ from dataclasses import dataclass
 @dataclass(slots=True)
 class ChunkEmbedding:
     chunk_id: str
-    workspace_id: str
+    project_id: str
     file_id: str
     embedding: list[float]
 

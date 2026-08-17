@@ -56,7 +56,7 @@ def seeder(session, repo):
     """Returns an async callable that creates user + file + chunk_vector rows and
     writes their embeddings through the repo. Returns the new file_id."""
 
-    async def _seed(workspace_id, chunks, *, commit=True):
+    async def _seed(project_id, chunks, *, commit=True):
         user = User()
         session.add(user)
         await session.flush()
@@ -65,7 +65,8 @@ def seeder(session, repo):
             name="d.txt",
             content_type="text/plain",
             head_value="h",
-            workspace_id=workspace_id,
+            project_id=project_id,
+            index_status="ready",
         )
         session.add(f)
         await session.flush()
@@ -84,7 +85,7 @@ def seeder(session, repo):
             items.append(
                 ChunkEmbedding(
                     chunk_id=chunk_id,
-                    workspace_id=workspace_id,
+                    project_id=project_id,
                     file_id=f.id,
                     embedding=embedding,
                 )

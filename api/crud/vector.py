@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Protocol
 
 from sqlalchemy import Column, MetaData, String, Table, delete, insert, select, text
@@ -23,7 +24,11 @@ class VectorRepository(Protocol):
     async def delete_by_file(self, session: AsyncSession, file_id: str) -> None: ...
 
     async def search_similar_chunks(
-        self, session: AsyncSession, embedding: list[float], k: int, workspace_id: str
+        self,
+        session: AsyncSession,
+        embedding: list[float],
+        k: int,
+        project_ids: Sequence[str],
     ) -> list[ChunkResult]: ...
 
 
@@ -34,7 +39,7 @@ class SqliteVecRepository:
                 text(
                     f"CREATE VIRTUAL TABLE IF NOT EXISTS {_VEC_TABLE} USING vec0("
                     "chunk_id TEXT PRIMARY KEY, "
-                    "workspace_id TEXT, "
+                    "project_id TEXT, "
                     "file_id TEXT, "
                     f"embedding float[{env.VECTOR_DIM}] distance_metric=cosine)"
                 )
@@ -47,13 +52,13 @@ class SqliteVecRepository:
 
         await session.execute(
             text(
-                f"INSERT INTO {_VEC_TABLE}(chunk_id, workspace_id, file_id, embedding) "
-                "VALUES (:chunk_id, :workspace_id, :file_id, :embedding)"
+                f"INSERT INTO {_VEC_TABLE}(chunk_id, project_id, file_id, embedding) "
+                "VALUES (:chunk_id, :project_id, :file_id, :embedding)"
             ),
             [
                 {
                     "chunk_id": it.chunk_id,
-                    "workspace_id": it.workspace_id,
+                    "project_id": it.project_id,
                     "file_id": it.file_id,
                     "embedding": sqlite_vec.serialize_float32(it.embedding),
                 }
@@ -68,28 +73,34 @@ class SqliteVecRepository:
         )
 
     async def search_similar_chunks(
-        self, session: AsyncSession, embedding: list[float], k: int, workspace_id: str
+        self,
+        session: AsyncSession,
+        embedding: list[float],
+        k: int,
+        project_ids: Sequence[str],
     ) -> list[ChunkResult]:
         import sqlite_vec
 
-        rows = await session.execute(
-            text(
-                "SELECT cv.id AS chunk_id, cv.file_id AS file_id, "
-                "cv.chunk_index AS chunk_index, "
-                "cv.file_content_offset AS file_content_offset, "
-                "cv.file_content_length AS file_content_length, "
-                "v.distance AS distance "
-                f"FROM {_VEC_TABLE} v JOIN {_CHUNK_TABLE} cv ON cv.id = v.chunk_id "
-                "WHERE v.workspace_id = :workspace_id AND v.embedding MATCH :query AND k = :k "
-                "ORDER BY v.distance"
-            ),
-            {
-                "workspace_id": workspace_id,
-                "query": sqlite_vec.serialize_float32(embedding),
-                "k": k,
-            },
-        )
-        return [ChunkResult(**row._mapping) for row in rows]
+        if not project_ids or k <= 0:
+            return []
+        query = sqlite_vec.serialize_float32(embedding)
+        results: list[ChunkResult] = []
+        for project_id in dict.fromkeys(project_ids):
+            rows = await session.execute(
+                text(
+                    "SELECT cv.id AS chunk_id, cv.file_id AS file_id, "
+                    "cv.chunk_index AS chunk_index, "
+                    "cv.file_content_offset AS file_content_offset, "
+                    "cv.file_content_length AS file_content_length, "
+                    "v.distance AS distance "
+                    f"FROM {_VEC_TABLE} v JOIN {_CHUNK_TABLE} cv ON cv.id = v.chunk_id "
+                    "WHERE v.project_id = :project_id AND v.embedding MATCH :query AND k = :k "
+                    "ORDER BY v.distance"
+                ),
+                {"project_id": project_id, "query": query, "k": k},
+            )
+            results.extend(ChunkResult(**row._mapping) for row in rows)
+        return sorted(results, key=lambda item: item.distance)[:k]
 
 
 class PgVectorRepository:
@@ -101,7 +112,7 @@ class PgVectorRepository:
             "chunk_embedding",
             self._metadata,
             Column("chunk_id", String(36), primary_key=True),
-            Column("workspace_id", String(36), nullable=False, index=True),
+            Column("project_id", String(36), nullable=False, index=True),
             Column("file_id", String(36), nullable=False, index=True),
             Column("embedding", Vector(env.VECTOR_DIM), nullable=False),
         )
@@ -125,7 +136,7 @@ class PgVectorRepository:
             [
                 {
                     "chunk_id": it.chunk_id,
-                    "workspace_id": it.workspace_id,
+                    "project_id": it.project_id,
                     "file_id": it.file_id,
                     "embedding": it.embedding,
                 }
@@ -137,8 +148,14 @@ class PgVectorRepository:
         await session.execute(delete(self._table).where(self._table.c.file_id == file_id))
 
     async def search_similar_chunks(
-        self, session: AsyncSession, embedding: list[float], k: int, workspace_id: str
+        self,
+        session: AsyncSession,
+        embedding: list[float],
+        k: int,
+        project_ids: Sequence[str],
     ) -> list[ChunkResult]:
+        if not project_ids or k <= 0:
+            return []
         distance = self._table.c.embedding.cosine_distance(embedding).label("distance")
         stmt = (
             select(
@@ -150,7 +167,7 @@ class PgVectorRepository:
                 distance,
             )
             .join(ChunkVector, ChunkVector.id == self._table.c.chunk_id)
-            .where(self._table.c.workspace_id == workspace_id)
+            .where(self._table.c.project_id.in_(project_ids))
             .order_by(distance)
             .limit(k)
         )
