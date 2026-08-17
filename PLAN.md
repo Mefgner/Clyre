@@ -144,6 +144,9 @@ retrieves from user-owned project scopes. Full implementation plan: **`docs/plan
 
 ### 4.2 Ingestion + embedding
 - [x] `api/pipelines/ingest.py`: `extract_text` (text formats) + `chunk_text` with character offsets
+- [ ] Add a shared document extraction layer before chunking: `DocumentExtractionResult` with normalized LLM-readable Markdown/plain text, preserved headings, paragraphs, tables, page/section boundaries, and source metadata; deterministic only, no LLM call
+- [ ] Add format adapters and dependencies for PDF (`pypdf`), DOCX (`python-docx`), XLSX (`openpyxl`), and PPTX (`python-pptx`); unsupported formats must fail explicitly with a user-visible status
+- [ ] Use the same extraction layer for file previews, attached-file context, and project ingestion so all paths see identical normalized content
 - [x] `api/pipelines/embed.py`: `EmbeddingPipeline.embed` via the embedding `llama-server`; Matryoshka truncation + optional normalization
 - [x] `api/services/ingestion.py` — the write path (`ingest_file`, `index_file_for_project`, `purge_file_vectors`); calls `ensure_for_write`
 - [x] `ChunkVector.token_count` via llama-server `/tokenize` (`count_tokens_many` on `LlamaLLMPipeline`)
@@ -151,7 +154,8 @@ retrieves from user-owned project scopes. Full implementation plan: **`docs/plan
 - [x] `CHUNK_SIZE` / `CHUNK_OVERLAP` in settings (defaults `1500` / `200`)
 - [x] `VECTOR_DIM` default is `1024`, matching Qwen3-Embedding-0.6B native dimension
 - [x] Markdown/text extraction
-- [ ] PDF (`pypdf`) and image extraction — later
+- [ ] Image extraction/OCR or local multimodal fallback — later
+- [ ] Add fixture tests for every supported document format, malformed files, empty documents, tables, and Unicode content
 
 ### 4.3 Promotion + search
 - [x] `POST /api/files/{file_id}/link/project/{project_id}` — set `project_id`, schedule ingestion + embedding
@@ -248,6 +252,7 @@ Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): d
 - [ ] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) and host the zip as a GitHub Release asset in this repo; first-run downloads from there, not upstream — reproducible install, fixed benchmark runtime, no upstream drift
 - [ ] Desktop (household): `run-desktop.py` / PyInstaller spec (`api/`, `scripts/`, `shared/`, `dist/`, `configs/`); first-run downloads the pinned binaries + Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B → starts llama-server(s) + uvicorn → opens browser; SQLite + sqlite-vec by default; test on a clean Windows machine without Python
 - [ ] Team server (Docker Compose): `docker compose up` — `db` (PostgreSQL + pgvector) + `clyre` (FastAPI monolith + Vue static); llama-server runs natively on the host for direct GPU (container reaches it via `host.docker.internal`) or as a compose service where nvidia-container-toolkit is configured; teammates reach it over the LAN in a browser (JWT multi-user already in scope)
+- [ ] Persist uploaded files in the team Docker deployment: mount `FILES_DIR` to a named volume or host path, and document backup/restore together with the database
 - [ ] Optional headless team mode without Docker: the desktop script as a systemd unit (Linux) / Windows service — always-on, auto-start on boot
 
 ### 6.4 Frontend completeness
