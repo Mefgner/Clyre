@@ -42,7 +42,7 @@ services:
     volumes:
       - clyre_pgdata:/var/lib/postgresql/data
 
-  llama:  
+  llama:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     environment:
       LLAMA_ARG_HOST: 0.0.0.0
