@@ -6,6 +6,25 @@ The orchestrator is built **bottom-up**: the spine (L0+L1) is barely more than t
 
 ---
 
+## Milestones
+
+A milestone is a capability check: can Clyre do X, end to end, on local hardware.
+Checked in order; each maps to the phase that makes it possible.
+
+- [ ] **M1 — Boot.** On a clean machine, both `llama-server` processes start (chat + embedding) and the web app serves an authenticated chat. *(Phase 1)*
+- [ ] **M2 — Fast chat.** A question is answered in `fast` mode with streaming, from a local model. *(Phase 2)*
+- [ ] **M3 — Attached files.** A user uploads a file, attaches it to a thread, and the answer uses its full content at a stable position. *(Phase 2)*
+- [ ] **M4 — Compaction.** A thread overflowing the context window is summarized (oldest → summary, recent verbatim) and still answers; the user is notified. *(Phase 2)*
+- [ ] **M5 — Inline tool.** In `fast` mode the model makes one read-only tool call (fetch/search) and answers from the result. *(Phase 2)*
+- [ ] **M6 — Projects.** A project groups threads and explicitly linked files can be selected from a listing. *(Phase 3)*
+- [ ] **M7 — Project RAG.** A file is added to a project, indexed in the background, semantic search returns relevant chunks, and the answer uses them. *(Phase 4)*
+- [ ] **M8 — Plan-and-execute.** A `plan` query runs planner → sequential steps → synthesizer and streams progress over SSE. *(Phase 5)*
+- [ ] **M9 — Approval.** A write tool pauses at a human-in-the-loop gate; approve executes, reject fails. *(Phase 5)*
+- [ ] **M10 — Benchmark.** Same queries on OpenCode (agentic) vs Clyre (deterministic), measured: tokens, LLM calls, latency, failure rate. *(Phase 6)*
+- [ ] **M11 — Desktop packaging.** A clean Windows machine without Python installs and runs the packaged app. *(Phase 6)*
+
+---
+
 ## Phase 1 — Structural foundation
 
 Table stakes for the thesis evaluation. Without it the architecture is not defensible.
@@ -21,16 +40,16 @@ Table stakes for the thesis evaluation. Without it the architecture is not defen
 - [ ] Rename `api/pipelines/llama.py` → `inference.py`, `LlamaLLMPipeline` → `OpenAICompatiblePipeline`
 - [ ] `chat_completion_*` accept `content` as `str | list` (multimodal)
 - [ ] Add constrained-decoding support (`response_format` / grammar) for structured outputs
-- [ ] Env, three model roles: `PRIMARY_*` (chat + workers), `SYNTHESIS_*` (planner + synthesizer; empty → falls back to PRIMARY), `EMBEDDING_*`. Keep old `LLAMA_*` as deprecated aliases with a warning
+- [ ] Env, three model tiers: `SMALL_*` (chat + worker steps), `BIG_*` (planner + synthesizer), `EMBEDDING_*` (a different model kind; needed only for RAG). Fallback: if only one of SMALL/BIG is set, it takes all load; EMBEDDING unset → RAG features off, chat works. Keep old `LLAMA_*` as deprecated aliases with a warning; rename `PRIMARY_*`/`SYNTHESIS_*` in `docker-compose.yml` and `env.py` accordingly
 - [ ] `OpenAICompatiblePipeline` resolves the endpoint by role; one client class, three configured instances
 - [ ] Fix `wait_for_startup` — max retry count (60 × 5s), raise after
-- [ ] `scripts/llama_launcher.py` — launch `llama-server` per local role: by default **two** (primary 6760, embed 6761); a third only if `SYNTHESIS_BASE_URL` points at a local process
+- [ ] `scripts/llama_launcher.py` — launch `llama-server` per local tier: by default **two** (small 6760, embed 6761); a third only if `BIG_BASE_URL` points at a local process
 - [ ] `configs/models.yaml` — replace Qwen3-4B with Qwen3.5-9B (Q4_K_M); add Qwen3-Embedding-0.6B
 - [ ] `configs/inference.yaml` — drop 4GB/6GB; profiles for 8/12/16/24GB tuned for Qwen3.5-9B
-- [ ] Set `VECTOR_DIM = 1024` (Qwen3-Embedding-0.6B native)
+- [x] Set `VECTOR_DIM = 1024` (Qwen3-Embedding-0.6B native)
 
 ### 1.3 SQLite hardening
-- [ ] Enable WAL mode for the desktop SQLite engine (concurrent family writes)
+- [x] Enable WAL mode for the desktop SQLite engine (concurrent family writes)
 
 ### 1.4 Token revocation (minimal)
 - [ ] `revoked_tokens` table: `jti` (UUID), `expires_at`
@@ -46,19 +65,23 @@ Table stakes for the thesis evaluation. Without it the architecture is not defen
 Plain async functions, callable by both the chat path and the orchestrator.
 - [ ] `fetch_file(file_id) -> str`
 - [ ] `list_project_files(project_id) -> list[FileMeta]`
-- [ ] `search_workspace(query, workspace_id, k) -> list[ChunkResult]` (delegates to `VectorRepository`)
+- [x] `search_project(query, user_id, project_ids?, k) -> list[ChunkResult]` (validates owned scopes, delegates to `VectorRepository`)
+- [ ] `hydrate_chunks(results) -> list[ChunkText]` — `ChunkResult` carries offsets, not text
 
 ### 2.2 File system abstraction (`api/pipelines/fs/`)
-- [ ] `FileStore` protocol: `save(file_bytes, filename, user_id) -> str`
-- [ ] `LocalFileStore` → `./data/files/<user_id>/`
-- [ ] Wire via DI in `app.py`
+- [x] `FileStore` protocol: `save` / `read` / `delete`
+- [x] `LocalFileStore` → `./data/files/<user_id>/<file_id>`
+- [x] Resolved via `get_file_store()` (module-level singleton, same shape as the other pipelines)
 
 ### 2.3 File upload + linking endpoints (`api/routes/files/`)
-- [ ] `POST /api/files/upload` — save file (`workspace_id = NULL` by default)
-- [ ] `GET /api/files/` — list user's files
-- [ ] `DELETE /api/files/{file_id}` — delete + cascade chunks
-- [ ] `POST /api/files/{file_id}/link/thread/{thread_id}`
-- [ ] `POST /api/files/{file_id}/link/project/{project_id}`
+Detailed steps: `docs/plans/vector-write-path.md`.
+- [x] `POST /api/files/upload` — save file (`project_id = NULL` by default)
+- [x] `GET /api/files/` — list user's files
+- [x] `DELETE /api/files/{file_id}` — purge vectors explicitly, then delete row + blob
+- [x] `POST /api/files/{file_id}/link/thread/{thread_id}`
+- [x] `POST /api/files/{file_id}/link/project/{project_id}`
+- [x] `crud/file.py` is implemented
+- [x] Add `python-multipart` (FastAPI `UploadFile` requires it)
 
 ### 2.4 Summarization + chat compaction
 - [ ] `api/pipelines/summarize.py`: `summarize(text, target_tokens) -> str`; token counts via `/tokenize`
@@ -79,35 +102,85 @@ Plain async functions, callable by both the chat path and the orchestrator.
 
 ## Phase 3 — Project management
 
-- [ ] `POST /api/projects/` — create
-- [ ] `GET /api/projects/` — list
-- [ ] `PUT /api/projects/{project_id}` — update title
-- [ ] `DELETE /api/projects/{project_id}` — delete (cascades to threads)
+### 3.1 Project file listing
+- [ ] `list_project_files` returns explicitly linked files with name, content type and `head_value`
+
+### 3.2 Endpoints
+- [x] `POST /api/projects/` — create
+- [x] `GET /api/projects/` — list
+- [x] `PUT /api/projects/{project_id}` — update title
+- [x] `DELETE /api/projects/{project_id}` — delete (cascades to threads and purges index)
 - [ ] `POST /api/projects/{project_id}/threads/{thread_id}` — assign thread
 - [ ] Frontend: project sidebar, thread grouping
 
 ---
 
-## Phase 4 — Workspace scope (embedding retrieval)
+## Phase 4 — Project scope (embedding retrieval)
 
-The only level where RAG applies. Triggered only when a file is promoted to the shared knowledge base.
+The only level where RAG applies. Triggered when a file is added to a **project's** index.
 
-### 4.1 Vector storage abstraction
-- [ ] Add nullable `workspace_id` to `FileMetadata` (migration)
-- [ ] `VectorRepository` protocol: `search_similar_chunks(embedding, k, workspace_id, session)`
-- [ ] `PgVectorRepository` (pgvector `<=>`)
-- [ ] `SqliteVecRepository` (sqlite-vec virtual table)
-- [ ] Select by `DB_ENGINE`
+**Scope model.** RAG is per-project: indexed chunks carry their `project_id`. No global or shared
+index — a shared KB degrades into a dump too quickly to be useful, and a household has
+no "knowledge base", it has files tied to the work at hand. The project corpus bounds the
+index: deleting the project purges its vectors, and retrieval pays off exactly where
+whole-file injection stops scaling (a project with dozens of large files fits no context
+window). No membership table. `project_id` is the only index scope.
+- [x] `search_similar_chunks` takes `project_ids: Sequence[str]`, not one id (pg: `IN`; sqlite: per-project `MATCH` + merge by distance, `vec0` metadata filtering is limited) — one user has several projects; hits merge across them
+- [x] `retrieval.project_scopes(user_id)`; `search_project` takes `user_id`, never a raw project id from the client
+- [x] Project linking schedules indexing — the server validates file and project ownership
+- [x] Deleting a project or unpromoting a file must purge its vectors (no FK, nothing cascades)
+
+The read and write paths are available through the file API — they connect
+`extract_text → chunk_text → embed → ChunkVector + add_chunks`, and `search_project` now
+retrieves from user-owned project scopes. Full implementation plan: **`docs/plans/vector-write-path.md`**.
+
+### 4.1 Vector storage abstraction — done
+- [x] Nullable `project_id` on `FileMetadata`
+- [x] `VectorRepository` protocol: `ensure_schema` / `add_chunks` / `delete_by_file` / `search_similar_chunks`
+- [x] `PgVectorRepository` (pgvector `<=>`, HNSW index)
+- [x] `SqliteVecRepository` (sqlite-vec `vec0` virtual table, extension loaded in `db.register_sqlite_vec`)
+- [x] Selected by `DB_ENGINE`; `ensure_schema` runs as an `app.py` startup handler
+- [x] `VectorIndexMeta` + `services/embedding_space.py` — guards against mixing embedding spaces
 
 ### 4.2 Ingestion + embedding
-- [ ] `api/pipelines/ingest.py`: chunk text (configurable size/overlap); formats: text, PDF (`pypdf`), markdown, images (multimodal text extraction)
-- [ ] `api/pipelines/embed.py`: `embed_chunks(chunks) -> list[list[float]]` via the embedding `llama-server`; batched
-- [ ] Store `ChunkVector` rows; `ON DELETE CASCADE`; re-upload = delete + re-ingest
+- [x] `api/pipelines/ingest.py`: `extract_text` (text formats) + `chunk_text` with character offsets
+- [x] `api/pipelines/embed.py`: `EmbeddingPipeline.embed` via the embedding `llama-server`; Matryoshka truncation + optional normalization
+- [x] `api/services/ingestion.py` — the write path (`ingest_file`, `index_file_for_project`, `purge_file_vectors`); calls `ensure_for_write`
+- [x] `ChunkVector.token_count` via llama-server `/tokenize` (`count_tokens_many` on `LlamaLLMPipeline`)
+- [x] Deleting chunks must call `repository.delete_by_file` **explicitly** — the vector store sits outside the ORM, so no cascade reaches it. On SQLite the orphans consume `k` slots and silently degrade recall
+- [x] `CHUNK_SIZE` / `CHUNK_OVERLAP` in settings (defaults `1500` / `200`)
+- [x] `VECTOR_DIM` default is `1024`, matching Qwen3-Embedding-0.6B native dimension
+- [x] Markdown/text extraction
+- [ ] PDF (`pypdf`) and image extraction — later
 
 ### 4.3 Promotion + search
-- [ ] `POST /api/files/{file_id}/promote-to-workspace` — set `workspace_id`, trigger ingestion + embedding
-- [ ] `search_workspace` wired through `VectorRepository`
+- [x] `POST /api/files/{file_id}/link/project/{project_id}` — set `project_id`, schedule ingestion + embedding
+- [x] `search_project` wired through `VectorRepository`, validates the embedding space on read
 - [ ] Available as a tool on the plan path (and optionally L1)
+
+### 4.4 Embedding-space migration
+The embedder changes over the project's life; that is a first-class operation, not an error.
+Dimension is fixed at `CREATE` on both backends (sqlite-vec `float[N]`, pgvector `Vector(N)`),
+so a model change is always DROP + CREATE + full re-embed. **Not an Alembic concern** —
+it is a data operation that needs a live `llama-server`.
+
+Simplest defensible shape: **block startup until migration completes** — the app only
+comes up with a ready index, so no intermediate state is ever visible. `run-desktop.py`
+already starts the llama-server group before uvicorn; the migration slots in between.
+
+Schema shape (ships with 4.2):
+- [ ] `VectorRepository.recreate_schema(engine)` — `ensure_schema` alone silently keeps a table of the old dimension
+- [ ] `PgVectorRepository` rebuilds its `Table` from current env instead of capturing `VECTOR_DIM` once in `__init__`
+- [ ] `VectorIndexMeta`: fingerprint (`model` + `dim`) + `status` (`ready|failed`) — enough to detect a mismatch and to know the index is unusable
+- [ ] E2E migration test for both SQLite/sqlite-vec and PostgreSQL/pgvector: build an old embedding space, change model/dimension, recreate the index, re-embed a file, verify search uses only the new vectors, and verify failure leaves the index unavailable rather than mixing spaces
+
+Startup migration:
+- [ ] On startup, compare the embedder fingerprint against `VectorIndexMeta`; on mismatch → `embedding_space.migrate()`: recreate store → re-ingest every indexed file, commit per file, idempotent on re-run (crash mid-way → next start resumes, not restarts)
+- [ ] Print per-file progress to the console (`Rebuilding KB: 12/40 files`) — a silent migration reads as a hang
+- [ ] Failure escape hatch: a failed rebuild must not loop the app — skip it, mark the index failed, and start anyway; L0 chat works, `search_project` → 409, never 500
+- [ ] Block only migration, never staleness: if migration is disabled/not run, an old-dimension index does not block startup; search reports unavailable
+- [ ] Re-ingest requires a healthy embedding `llama-server` — the bootstrap script sequences the migration after it is up
+- [ ] Out of scope: zero-downtime migration, versioned side-by-side spaces, per-chunk lazy re-embed — distances from two embedding spaces cannot be merged into one ranking
 
 ---
 
@@ -119,15 +192,15 @@ Build only after L0/L1 are solid. **Not** ReAct — finite plan, no open loop.
 - [ ] `OrchestratorState` (JSON-serializable): run_id, plan, step outputs, status, history
 - [ ] `Step`: id, tool, input (may hold `$stepN.field` refs), status, output
 - [ ] `engine.py`: sequential step execution; engine resolves `$stepN` refs before each call
-- [ ] `planner.py`: full context → finite list of steps (runs on `SYNTHESIS` role, falls back to `PRIMARY`)
-- [ ] `synthesizer.py`: full context + step results → answer (runs on `SYNTHESIS` role)
-- [ ] Worker steps run on `PRIMARY`; only planner/synthesizer use the reasoning role
+- [ ] `planner.py`: full context → finite list of steps (runs on `BIG`, falls back to `SMALL`)
+- [ ] `synthesizer.py`: full context + step results → answer (runs on `BIG`)
+- [ ] Worker steps run on `SMALL`; only planner/synthesizer use the `BIG` reasoning tier
 - [ ] Verify: at most one capped re-plan on failure (never a loop)
 
 ### 5.2 Tool registry
 - [ ] `ToolManifest`: name, description, input/output schema, handler, `requires_approval`
 - [ ] Load from `configs/tools/*.yaml`; validate I/O against schemas
-- [ ] Built-in tools (few, high-level): `fetch_file`, `list_project_files`, `search_workspace`
+- [ ] Built-in tools (few, high-level): `fetch_file`, `list_project_files`, `search_project`
 - [ ] A handler may wrap a deterministic sub-machine ("garbage → structured content"); hidden sub-machines are **read-only**
 - [ ] Worker steps get **isolated** context; planner/synthesizer get full context
 
@@ -167,17 +240,22 @@ Build only after L0/L1 are solid. **Not** ReAct — finite plan, no open loop.
 ### 6.2 Thesis evaluation artifacts
 - [ ] Passive top-k RAG vs agentic fetch on 3-5 queries; document the gap
 - [ ] 4B vs 9B on structured output / tool calling; demonstrate why 9B is the floor
+- [ ] Scalability test: concurrent users, streaming throughput, SQLite WAL write concurrency
+- [ ] Edge-device performance: run the benchmark on a consumer GPU, report latency / tokens / VRAM / failure rate
 
-### 6.3 Desktop packaging
-- [ ] PyInstaller spec: `api/`, `scripts/`, `shared/`, `dist/`, `configs/`
-- [ ] First-run: download both binaries + Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B → start servers → open browser
-- [ ] Test on a clean Windows machine without Python
+### 6.3 Deployment
+Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): desktop script vs Docker Compose.
+- [ ] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) and host the zip as a GitHub Release asset in this repo; first-run downloads from there, not upstream — reproducible install, fixed benchmark runtime, no upstream drift
+- [ ] Desktop (household): `run-desktop.py` / PyInstaller spec (`api/`, `scripts/`, `shared/`, `dist/`, `configs/`); first-run downloads the pinned binaries + Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B → starts llama-server(s) + uvicorn → opens browser; SQLite + sqlite-vec by default; test on a clean Windows machine without Python
+- [ ] Team server (Docker Compose): `docker compose up` — `db` (PostgreSQL + pgvector) + `clyre` (FastAPI monolith + Vue static); llama-server runs natively on the host for direct GPU (container reaches it via `host.docker.internal`) or as a compose service where nvidia-container-toolkit is configured; teammates reach it over the LAN in a browser (JWT multi-user already in scope)
+- [ ] Optional headless team mode without Docker: the desktop script as a systemd unit (Linux) / Windows service — always-on, auto-start on boot
 
 ### 6.4 Frontend completeness
-- [ ] File management UI (upload, list, attach, promote to workspace)
+- [ ] File management UI (upload, list, attach, index automatically in project)
 - [ ] Project sidebar
 - [ ] Agent progress stepper with approval dialog
 - [ ] Settings: inference/embedding URLs, model names, `ALLOW_FILE_SUMMARIZATION`, router mode
+- [ ] PWA: manifest + service worker + icons (`vite-plugin-pwa`) — installable, standalone window, offline shell; works on `localhost` (desktop); on LAN it degrades to a browser tab without a self-signed cert
 
 ### 6.5 Observability
 - [ ] Structured request logging (request id, user id, duration)
@@ -191,7 +269,9 @@ Build only after L0/L1 are solid. **Not** ReAct — finite plan, no open loop.
 - Mobile clients
 - Telegram bot (commented-out code — remove or leave commented)
 - Cloud provider support (the OpenAI-compatible URL covers all local cases)
-- Multi-tenancy / RBAC (one workspace per deployment; `user_id` FK isolation suffices)
+- nginx / TLS termination (the compose stack serves plain HTTP on the LAN; a self-signed cert for PWA install is a later option)
+- Multi-tenancy / RBAC (RAG is per-project; `user_id` FK isolation suffices)
+- Global/shared index (a shared dump degrades fast; per-project indexes only)
 - Real-time collaboration (SSE is one-way and sufficient)
 - Incremental chunk diffing on file update (re-ingest whole file)
 - Separate vector database (pgvector + sqlite-vec; no Qdrant/Weaviate)
