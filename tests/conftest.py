@@ -8,7 +8,6 @@ os.environ["VECTOR_DIM"] = "8"
 os.environ["NORMALIZE_VECTORS"] = "true"
 os.environ.setdefault("HASHING_SECRET", "test")
 os.environ.setdefault("ACCESS_TOKEN_SECRET", "test")
-os.environ.setdefault("REFRESH_TOKEN_SECRET", "test")
 
 import pytest
 import pytest_asyncio

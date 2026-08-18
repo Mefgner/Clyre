@@ -1,3 +1,9 @@
+from .auth import (
+    create_refresh_token,
+    get_refresh_token,
+    get_refresh_token_by_hash,
+    revoke_refresh_token,
+)
 from .file import (
     create_file,
     delete_file,
@@ -44,6 +50,7 @@ from .user import (
 
 __all__ = [
     "create_file",
+    "create_refresh_token",
     "create_local_connection",
     "create_message",
     "create_project",
@@ -67,12 +74,15 @@ __all__ = [
     "get_project_link",
     "get_thread_by_id",
     "get_thread_link",
+    "get_refresh_token",
+    "get_refresh_token_by_hash",
     "get_user_by_id",
     "link_file_to_project",
     "link_file_to_thread",
     "list_user_files",
     "list_user_projects",
     "rename_thread",
+    "revoke_refresh_token",
     "star_thread",
     "thread_to_project_connection",
     "update_thread_time",

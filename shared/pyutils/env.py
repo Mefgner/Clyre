@@ -33,7 +33,6 @@ class Settings(BaseSettings):
     # Hashing
     HASHING_SECRET: str
     ACCESS_TOKEN_SECRET: str
-    REFRESH_TOKEN_SECRET: str
     # SERVICE_SECRET: str = "forbidden"  # Deprecated telegram bot access
     ACCESS_TOKEN_DUR_MINUTES: int = 15
     REFRESH_TOKEN_DUR_DAYS: int = 15

@@ -122,8 +122,16 @@ async def register(
 
 
 @auth_router.post("/logout", response_model=LogoutResponse, status_code=200)
-async def logout(response: Response):
+async def logout(
+    response: Response,
+    refresh_payload: Annotated[
+        TokenPayload | None, Depends(web.extract_optional_refresh_token)
+    ],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
     Logger.info("Processing logout request")
+    if refresh_payload:
+        await auth_sc.revoke_refresh_token(session, refresh_payload)
     response.delete_cookie("refresh_token")
     return {"message": "Successfully logged out"}
 
@@ -132,9 +140,13 @@ async def logout(response: Response):
 async def refresh_access(
     response: Response,
     refresh_payload: Annotated[TokenPayload, Depends(web.extract_refresh_token)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     Logger.info("Processing refresh request")
-    access, refresh = await auth_sc.refresh_token(refresh_payload)
+    try:
+        access, refresh = await auth_sc.refresh_token(session, refresh_payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
     response.set_cookie("refresh_token", refresh.token, expires=refresh.expires, httponly=True)
     return RefreshResponse(token=access.token)
 

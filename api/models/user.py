@@ -18,6 +18,9 @@ class User(Base):
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
     threads = relationship("Thread", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
+    refresh_tokens = relationship(
+        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    )
 
     user_roles = relationship(
         "RoleHasUser", back_populates="user", cascade="all, delete-orphan"

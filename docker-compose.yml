@@ -10,7 +10,6 @@ services:
       DATABASE_URL: postgresql+asyncpg://clyre:clyre_secret@db:5432/clyre
       HASHING_SECRET: ${HASHING_SECRET:?}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?}
-      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?}
       ACCESS_TOKEN_DUR_MINUTES: 15
       REFRESH_TOKEN_DUR_DAYS: 15
       LLAMA_URL: http://llama:6760

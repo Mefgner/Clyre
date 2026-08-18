@@ -3,7 +3,10 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 from fastapi.params import Cookie, Header
 from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from crud import get_refresh_token, get_refresh_token_by_hash
+from db import get_db_session
 from schemas import general
 from utils import cfg, env, hashing, timing
 
@@ -23,8 +26,9 @@ def _extract_header_credentials(authorization: Annotated[str | None, Header()] =
     return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)
 
 
-def extract_access_token(
+async def extract_access_token(
     token: Annotated[HTTPAuthorizationCredentials, Depends(_extract_header_credentials)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     if token.scheme.lower() != "bearer":
         raise HTTPException(
@@ -38,29 +42,67 @@ def extract_access_token(
         if expires_at < timing.get_utc_now():
             raise ValueError("Access token expired")
 
-        return general.TokenPayload(**token_dict)
-    except ValueError as exc:
+        payload = general.TokenPayload(**token_dict)
+        _require_access_claim(payload)
+        refresh_token = await get_refresh_token(session, str(payload.refresh_token_id))
+        if refresh_token is None:
+            raise ValueError("Refresh token is revoked or expired")
+        if _refresh_token_is_invalid(refresh_token) or refresh_token.user_id != payload.user_id:
+            raise ValueError("Refresh token is revoked or expired")
+        return payload
+    except (OverflowError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=401, detail="Invalid access token, token expired or malformed"
         ) from exc
 
 
-def extract_refresh_token(
+async def extract_refresh_token(
     auth: Annotated[str, Cookie(alias="refresh_token")],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     try:
-        token_dict = hashing.verify_jwt(auth, env.REFRESH_TOKEN_SECRET)
-
-        created_at = timing.utc_from_timestamp(token_dict["timestamp"])
-        expires_at = timing.offset_datetime(created_at, cfg.get_refresh_token_dur_days())
-        if expires_at < timing.get_utc_now():
-            raise ValueError("Refresh token expired, generate a new one")
-
-        return general.TokenPayload(**token_dict)
-    except ValueError as exc:
+        refresh_token = await get_refresh_token_by_hash(session, hashing.hash_content(auth))
+        if refresh_token is None or _refresh_token_is_invalid(refresh_token):
+            raise ValueError("Refresh token is revoked or expired")
+        created_at = refresh_token.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timing.get_utc_now().tzinfo)
+        return general.TokenPayload(
+            user_id=refresh_token.user_id,
+            timestamp=created_at.timestamp(),
+            refresh_token_id=refresh_token.id,
+        )
+    except (OverflowError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=401, detail="Invalid refresh token, token expired or malformed"
         ) from exc
+
+
+async def extract_optional_refresh_token(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    auth: Annotated[str | None, Cookie(alias="refresh_token")] = None,
+):
+    if auth is None:
+        return None
+    try:
+        return await extract_refresh_token(auth, session)
+    except HTTPException:
+        # Logout is idempotent even if the browser presents an expired token.
+        return None
+
+
+def _require_access_claim(payload: general.TokenPayload) -> None:
+    if not payload.refresh_token_id:
+        raise ValueError("Malformed token")
+
+
+def _refresh_token_is_invalid(refresh_token) -> bool:
+    if not refresh_token or refresh_token.revoked_at:
+        return True
+    expires_at = refresh_token.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timing.get_utc_now().tzinfo)
+    return expires_at < timing.get_utc_now()
 
 
 # def extract_service_token(

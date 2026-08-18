@@ -17,6 +17,7 @@ _EXPECTED_TABLES = {
     "role",
     "role_has_user",
     "thread",
+    "refresh_token",
     "user",
     "vector_index_meta",
 }

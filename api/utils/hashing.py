@@ -1,4 +1,5 @@
 import hashlib
+import secrets
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
@@ -12,7 +13,7 @@ from utils import timing
 ph = argon2.PasswordHasher()
 
 
-class JWTToken(BaseModel):
+class TokenResult(BaseModel):
     token: str
     expires: datetime
 
@@ -38,19 +39,26 @@ def generate_uuid() -> str:
 
 
 def create_jwt(
-    payload: dict[str, str], secret: str, from_: datetime, timespan: timedelta
-) -> JWTToken:
+    payload: dict[str, Any], secret: str, from_: datetime, timespan: timedelta
+) -> TokenResult:
     expires = timing.offset_datetime(from_, timespan)
-    tk = JWTToken(
+    claims = {**payload, "exp": int(expires.timestamp())}
+    tk = TokenResult(
         token=jwt.encode(
-            payload,
+            claims,
             secret,
             algorithm="HS256",
-            headers={"exp": str(expires)},
         ),
         expires=expires,
     )
     return tk
+
+
+def create_opaque_token(from_: datetime, timespan: timedelta) -> TokenResult:
+    return TokenResult(
+        token=secrets.token_urlsafe(32),
+        expires=timing.offset_datetime(from_, timespan),
+    )
 
 
 def verify_jwt(token: str, secret: str) -> dict[str, Any]:
@@ -63,6 +71,7 @@ def verify_jwt(token: str, secret: str) -> dict[str, Any]:
 
 __all__ = [
     "create_jwt",
+    "create_opaque_token",
     "generate_uuid",
     "hash_content",
     "hash_password",
