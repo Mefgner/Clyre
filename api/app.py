@@ -50,7 +50,6 @@ async def handle_exception(request, exc):
 
 # DB engine startup side effect
 
-app.add_event_handler("startup", db.get_session_manager().init_models)
 app.add_event_handler("shutdown", db.get_session_manager().close)
 
 

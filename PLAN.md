@@ -30,13 +30,21 @@ Checked in order; each maps to the phase that makes it possible.
 Table stakes for the thesis evaluation. Without it the architecture is not defensible.
 
 ### 1.1 Alembic migrations
-- [ ] Add `alembic` to `pyproject.toml`
-- [ ] `alembic init` with async-compatible `env.py`
-- [ ] Initial migration from current models
-- [ ] Remove `init_models()` from `app.py` startup
-- [ ] Document migration workflow in `CLAUDE.md`
+- [x] Add `alembic` to `pyproject.toml`
+- [x] `alembic init` with async-compatible `env.py`
+- [x] Initial migration from current models
+- [x] Remove `init_models()` from `app.py` startup
 
-### 1.2 Inference pipeline rename + dual model + model registry
+### 1.2 Token revocation (minimal)
+- [ ] `revoked_tokens` table: `jti` (UUID), `expires_at`
+- [ ] On `/logout`, write the access token `jti`
+- [ ] `extract_access_token` checks `jti` against the table
+- [ ] Startup cleanup of expired rows
+
+### 1.3 SQLite hardening
+- [x] Enable WAL mode for the desktop SQLite engine (concurrent family writes)
+
+### 1.4 Inference pipeline rename + dual model + model registry
 - [ ] Rename `api/pipelines/llama.py` → `inference.py`, `LlamaLLMPipeline` → `OpenAICompatiblePipeline`
 - [ ] `chat_completion_*` accept `content` as `str | list` (multimodal)
 - [ ] Add constrained-decoding support (`response_format` / grammar) for structured outputs
@@ -47,15 +55,6 @@ Table stakes for the thesis evaluation. Without it the architecture is not defen
 - [ ] `configs/models.yaml` — replace Qwen3-4B with Qwen3.5-9B (Q4_K_M); add Qwen3-Embedding-0.6B
 - [ ] `configs/inference.yaml` — drop 4GB/6GB; profiles for 8/12/16/24GB tuned for Qwen3.5-9B
 - [x] Set `VECTOR_DIM = 1024` (Qwen3-Embedding-0.6B native)
-
-### 1.3 SQLite hardening
-- [x] Enable WAL mode for the desktop SQLite engine (concurrent family writes)
-
-### 1.4 Token revocation (minimal)
-- [ ] `revoked_tokens` table: `jti` (UUID), `expires_at`
-- [ ] On `/logout`, write the access token `jti`
-- [ ] `extract_access_token` checks `jti` against the table
-- [ ] Startup cleanup of expired rows
 
 ---
 

@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from models import Base
 from utils import env
 
 Logger = logging.getLogger(__name__)
@@ -52,11 +51,6 @@ class AsyncSessionManager:
             expire_on_commit=False,
             class_=AsyncSession,
         )
-
-    async def init_models(self):
-        async with self._engine.begin() as conn:
-            Logger.info("Creating database tables")
-            await conn.run_sync(Base.metadata.create_all)
 
     @property
     def async_engine(self) -> AsyncEngine:

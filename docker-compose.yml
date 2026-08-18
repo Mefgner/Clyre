@@ -17,8 +17,10 @@ services:
       PRIMARY_MODEL_NAME: ${PRIMARY_MODEL_ALIAS:-model}
       PRIMARY_MODEL_SIZE: small
     depends_on:
-      - db
-      - llama
+      db:
+        condition: service_healthy
+      llama:
+        condition: service_started
     ports:
       - "6750:6750"
 
@@ -39,6 +41,11 @@ services:
       POSTGRES_USER: clyre
       POSTGRES_PASSWORD: clyre_secret
       POSTGRES_DB: clyre
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clyre -d clyre"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     volumes:
       - clyre_pgdata:/var/lib/postgresql/data
 

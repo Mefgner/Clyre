@@ -49,6 +49,7 @@ Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` re
 ## Dev
 - Backend: `poetry run python run-desktop.py`
 - Frontend: `npm run dev` / `npm run type-check`
+- Migrations: run by launchers before the API starts — `run-desktop.py` and the Dockerfile CMD (`python -m db_migrations`); CLI: `poetry run alembic upgrade head`, new revision: `poetry run alembic revision --autogenerate -m "<msg>"`, verify: `poetry run alembic check`
 - Env: copy `configs/base.env` → `.env`
 - Deployment: runtime-agnostic monolith — desktop script (`run-desktop.py`, SQLite default) or `docker compose up` (PostgreSQL + pgvector); `DB_ENGINE`/`DATABASE_URL` select the backend.
 

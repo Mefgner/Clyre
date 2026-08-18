@@ -27,6 +27,11 @@ if __name__ == "__main__":
     api_dir = Path(__file__).parent / "api"
     sys.path.insert(0, str(api_dir))
 
+    # Apply schema migrations before the API accepts any request
+    import db_migrations
+
+    db_migrations.run_migrations()
+
     from api.main import main
 
     main()
