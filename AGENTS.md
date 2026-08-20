@@ -17,28 +17,11 @@ Locally-hosted, LLM-powered web app for small teams and households (bachelor the
 - DB: SQLAlchemy (async) — SQLite + sqlite-vec WAL (desktop default); PostgreSQL 16 + pgvector via the same `DB_ENGINE` switch (Docker Compose for teams)
 - Migrations: Alembic
 
-## Models
-- Default chat: Qwen3.5-9B (Q4_K_M). Hard floor: 9B params.
-- Embedding: Qwen3-Embedding-0.6B, `VECTOR_DIM = 1024`.
-- Three tiers (env): `SMALL_*` (chat + worker steps), `BIG_*` (planner + synthesizer; falls back to SMALL — if only one tier is configured, it takes all load), `EMBEDDING_*`. One client class, configured per tier. The BIG tier must stay local (sees full user context).
-
 ## Layout
 Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py` (logic) → `crud/<domain>.py` (queries) → `schemas/<domain>.py` (DTOs) → `models/<domain>.py` (ORM).
 - `api/pipelines/`: inference, summarize, embed, ingest, fs/
 - `api/services/retrieval.py`: `fetch_file` / `list_project_files` / `search_project` — plain async funcs shared by chat and orchestrator
 - `api/modules/orchestrator/`: plan-and-execute engine
-
-## Response pipeline
-`POST /api/chat` (`mode: auto|fast|plan`):
-- **FAST:** compacted history + attached files (stable position) → answer; optional one read-only inline tool call. Streams **NDJSON**.
-- **PLAN:** planner → sequential tool steps → synthesizer. Checkpointed at approval/completion. Progress via **SSE**.
-
-## Context management
-- No passive RAG. Chat scope = whole files + compaction on overflow; project scope = tool-driven fetch; per-project index = embedding retrieval (the only RAG level, behind `VectorRepository`; no global index).
-- Injected context goes at a stable position, never mid-history.
-
-## Orchestrator
-Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` refs; linear plans; verify failure → at most one capped re-plan. Write tools require approval (human-in-the-loop). Worker steps = isolated context on `SMALL`; planner/synthesizer = full context on `BIG`.
 
 ## Conventions
 - Logic in services, queries in crud, `commit()` in services only. `get_db_session` from `api/db.py`.
@@ -55,3 +38,6 @@ Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` re
 
 ## Status
 See `PLAN.md` for the full phased roadmap and what is done vs pending.
+
+## Known weaknesses
+Frontend issues triage (from an outside review, with severity + suggested fix order): `web/FRONTEND_ISSUES.md`. Check it before touching frontend code.

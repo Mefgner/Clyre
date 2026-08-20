@@ -11,7 +11,7 @@ The orchestrator is built **bottom-up**: the spine (L0+L1) is barely more than t
 A milestone is a capability check: can Clyre do X, end to end, on local hardware.
 Checked in order; each maps to the phase that makes it possible.
 
-- [ ] **M1 — Boot.** On a clean machine, both `llama-server` processes start (chat + embedding) and the web app serves an authenticated chat. *(Phase 1)*
+- [x] **M1 — Boot.** On a clean machine, both `llama-server` processes start (chat + embedding) and the web app (built frontend served by FastAPI, SPA fallback) serves an authenticated chat. *(Phase 1)*
 - [ ] **M2 — Fast chat.** A question is answered in `fast` mode with streaming, from a local model. *(Phase 2)*
 - [ ] **M3 — Attached files.** A user uploads a file, attaches it to a thread, and the answer uses its full content at a stable position. *(Phase 2)*
 - [ ] **M4 — Compaction.** A thread overflowing the context window is summarized (oldest → summary, recent verbatim) and still answers; the user is notified. *(Phase 2)*
@@ -22,6 +22,11 @@ Checked in order; each maps to the phase that makes it possible.
 - [ ] **M9 — Approval.** A write tool pauses at a human-in-the-loop gate; approve executes, reject fails. *(Phase 5)*
 - [ ] **M10 — Benchmark.** Same queries on OpenCode (agentic) vs Clyre (deterministic), measured: tokens, LLM calls, latency, failure rate. *(Phase 6)*
 - [ ] **M11 — Desktop packaging.** A clean Windows machine without Python installs and runs the packaged app. *(Phase 6)*
+
+> **Environment boundary.** Source and Docker installations require the user to
+> create and configure `.env` manually from `configs/base.env.example`, including
+> the required secrets. M1 does not generate secrets automatically. First-run
+> secret generation and persistence are reserved for the packaged EXE in M11.
 
 ---
 
@@ -35,26 +40,53 @@ Table stakes for the thesis evaluation. Without it the architecture is not defen
 - [x] Initial migration from current models
 - [x] Remove `init_models()` from `app.py` startup
 
-### 1.2 Token revocation (minimal)
-- [ ] `revoked_tokens` table: `jti` (UUID), `expires_at`
-- [ ] On `/logout`, write the access token `jti`
-- [ ] `extract_access_token` checks `jti` against the table
-- [ ] Startup cleanup of expired rows
+### 1.2 Authentication and token revocation
+- [x] Access JWTs are signed with `ACCESS_TOKEN_SECRET`, carry a standard `exp` claim,
+  `user_id`, and the related `refresh_token_id`
+- [x] `refresh_token` table: `id`, `token_hash`, `user_id`, `created_at`, `expires_at`, `revoked_at`
+- [x] Refresh cookies contain opaque random tokens; only their SHA-256 hashes are stored
+- [x] `/refresh` rotates the refresh token: revokes the old row and creates a new one
+- [x] `/logout` revokes the current refresh-token row and clears the httponly cookie
+- [x] `extract_access_token` checks the linked refresh-token row, expiry, revocation, and user ownership
+- [x] JWT security coverage: signature tampering, wrong secret, unsupported algorithms, expiration,
+  malformed claims, cross-user token references, and refresh-token type confusion
 
 ### 1.3 SQLite hardening
 - [x] Enable WAL mode for the desktop SQLite engine (concurrent family writes)
 
 ### 1.4 Inference pipeline rename + dual model + model registry
-- [ ] Rename `api/pipelines/llama.py` → `inference.py`, `LlamaLLMPipeline` → `OpenAICompatiblePipeline`
-- [ ] `chat_completion_*` accept `content` as `str | list` (multimodal)
-- [ ] Add constrained-decoding support (`response_format` / grammar) for structured outputs
-- [ ] Env, three model tiers: `SMALL_*` (chat + worker steps), `BIG_*` (planner + synthesizer), `EMBEDDING_*` (a different model kind; needed only for RAG). Fallback: if only one of SMALL/BIG is set, it takes all load; EMBEDDING unset → RAG features off, chat works. Keep old `LLAMA_*` as deprecated aliases with a warning; rename `PRIMARY_*`/`SYNTHESIS_*` in `docker-compose.yml` and `env.py` accordingly
-- [ ] `OpenAICompatiblePipeline` resolves the endpoint by role; one client class, three configured instances
-- [ ] Fix `wait_for_startup` — max retry count (60 × 5s), raise after
-- [ ] `scripts/llama_launcher.py` — launch `llama-server` per local tier: by default **two** (small 6760, embed 6761); a third only if `BIG_BASE_URL` points at a local process
-- [ ] `configs/models.yaml` — replace Qwen3-4B with Qwen3.5-9B (Q4_K_M); add Qwen3-Embedding-0.6B
-- [ ] `configs/inference.yaml` — drop 4GB/6GB; profiles for 8/12/16/24GB tuned for Qwen3.5-9B
+- [x] Rename `api/pipelines/llama.py` → `inference.py`, `LlamaLLMPipeline` → `LLMPipeline`
+- [x] `chat_completion_*` accept `content` as `str | list` (multimodal)
+- [x] Add constrained-decoding support (`response_format` / grammar) for structured outputs
+- [x] Env, three model tiers: `SMALL_*` (chat + worker steps), `BIG_*` (planner + synthesizer), `EMBEDDING_*` (a different model kind; needed for RAG). Fallback: if only one of SMALL/BIG is set, it takes all load; neither set → `RuntimeError` at startup. Old `LLAMA_*`/`PRIMARY_*`/`SYNTHESIS_*` were renamed outright (no deprecated aliases); `docker-compose.yml` and `env.py` use the new names
+- [x] `LLMPipeline` resolves the endpoint by role; one client class, configured instances per tier (`get_inference_pipeline(Tier)`); embedding stays a separate `EmbeddingPipeline`
+- [x] Fix `wait_for_startup` — max retry count (60 × 5s), raise after (both `inference.py` and `embed.py`)
+- [x] `scripts/llama_launcher.py` — launch `llama-server` per local tier: by default **two** (small 6760, embed 6761); a third only if `BIG_BASE_URL` points at a local process
+- [x] `configs/models.yaml` — replace Qwen3-4B with Qwen3.5-9B (Q4_K_M); add Qwen3-Embedding-0.6B (Q6_K). Model catalog is the source of truth (`role:` field); `.env` holds only route overrides. The catalog contains only fields needed for download, selection and launch.
+- [x] `configs/inference.yaml` — drop 4GB/6GB; profiles for 8/12/16/24GB tuned for Qwen3.5-9B
 - [x] Set `VECTOR_DIM = 1024` (Qwen3-Embedding-0.6B native)
+
+### 1.5 Environment template
+- [x] `configs/base.env.example` filled with a working manual template (required
+  `HASHING_SECRET` / `ACCESS_TOKEN_SECRET` left empty for the user to set)
+- [x] Documented (in the template and the M1 note) that `.env` is user-managed in
+  source/Docker mode; required secrets are supplied manually and never generated
+  by M1 bootstrap
+- [x] Remove `configs/base.env`; keep only `configs/base.env.example`
+- [x] Reserve automatic local secret generation and persistence for the packaged
+  EXE first-run flow in M11 (noted in 6.3)
+
+### 1.6 Static web serving (FastAPI)
+- [x] FastAPI serves the built frontend for both delivery shapes with SPA fallback
+  to `index.html`; API routes stay under `/api` and are unaffected
+  (`api/app.py` finds the build under `web/dist` or `dist`)
+- [x] Desktop: `run-desktop.py` boots uvicorn that serves the built frontend on the
+  same origin as the API — no Node/nginx needed at runtime
+- [x] Docker: the web build is baked into the API image (multi-stage `Dockerfile.api`)
+  and served by FastAPI; `nginx.conf` and the separate `web` service removed
+- [x] Vite dev-server proxy `/api` → `localhost:6750` for the dev flow
+- [x] First-run/readme documents `npm ci` + `npm run build` before boot for source
+  installs; the packaged EXE embeds the built frontend
 
 ---
 
@@ -148,7 +180,7 @@ retrieves from user-owned project scopes. Full implementation plan: **`docs/plan
 - [ ] Use the same extraction layer for file previews, attached-file context, and project ingestion so all paths see identical normalized content
 - [x] `api/pipelines/embed.py`: `EmbeddingPipeline.embed` via the embedding `llama-server`; Matryoshka truncation + optional normalization
 - [x] `api/services/ingestion.py` — the write path (`ingest_file`, `index_file_for_project`, `purge_file_vectors`); calls `ensure_for_write`
-- [x] `ChunkVector.token_count` via llama-server `/tokenize` (`count_tokens_many` on `LlamaLLMPipeline`)
+- [x] `ChunkVector.token_count` via llama-server `/tokenize` (`count_tokens_many` on `LLMPipeline`)
 - [x] Deleting chunks must call `repository.delete_by_file` **explicitly** — the vector store sits outside the ORM, so no cascade reaches it. On SQLite the orphans consume `k` slots and silently degrade recall
 - [x] `CHUNK_SIZE` / `CHUNK_OVERLAP` in settings (defaults `1500` / `200`)
 - [x] `VECTOR_DIM` default is `1024`, matching Qwen3-Embedding-0.6B native dimension
@@ -248,9 +280,11 @@ Build only after L0/L1 are solid. **Not** ReAct — finite plan, no open loop.
 
 ### 6.3 Deployment
 Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): desktop script vs Docker Compose.
-- [ ] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) and host the zip as a GitHub Release asset in this repo; first-run downloads from there, not upstream — reproducible install, fixed benchmark runtime, no upstream drift
-- [ ] Desktop (household): `run-desktop.py` / PyInstaller spec (`api/`, `scripts/`, `shared/`, `dist/`, `configs/`); first-run downloads the pinned binaries + Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B → starts llama-server(s) + uvicorn → opens browser; SQLite + sqlite-vec by default; test on a clean Windows machine without Python
-- [ ] Team server (Docker Compose): `docker compose up` — `db` (PostgreSQL + pgvector) + `clyre` (FastAPI monolith + Vue static); llama-server runs natively on the host for direct GPU (container reaches it via `host.docker.internal`) or as a compose service where nvidia-container-toolkit is configured; teammates reach it over the LAN in a browser (JWT multi-user already in scope)
+- [x] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) — b6239 binary + b6595 cudart DLL set, both FLAT zips extracted into one `binaries/<folder>/` so `llama-server.exe` sits next to `ggml-cuda.dll` and the cudart libs; downloader/exe-resolution logic verified against the real archive layout
+- [ ] Host the pinned zips as GitHub Release assets in this repo; first-run downloads from there, not upstream — reproducible install, fixed benchmark runtime, no upstream drift
+- [x] Desktop (household): `run-desktop.py` / PyInstaller spec (`api/`, `scripts/`, `shared/`, `dist/`, `configs/`); first-run downloads the pinned binaries + Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B → generates and persists local secrets → starts llama-server(s) + uvicorn (serving the built frontend) → opens browser; SQLite + sqlite-vec by default; test on a clean Windows machine without Python
+- [x] Team server (Docker Compose): `docker compose up` — `db` (pgvector image) + `clyre` (FastAPI monolith serving the built Vue frontend); llama/embedding services with HF model auto-download and `/health` healthchecks; the API waits for db+llama+embedding to be healthy
+- [ ] Docker: llama-server runs natively on the host for direct GPU (container reaches it via `host.docker.internal`) or as a compose service where nvidia-container-toolkit is configured — verify the GPU-reservation path on a real host
 - [ ] Persist uploaded files in the team Docker deployment: mount `FILES_DIR` to a named volume or host path, and document backup/restore together with the database
 - [ ] Optional headless team mode without Docker: the desktop script as a systemd unit (Linux) / Windows service — always-on, auto-start on boot
 
@@ -264,6 +298,9 @@ Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): d
 ### 6.5 Observability
 - [ ] Structured request logging (request id, user id, duration)
 - [ ] `/api/metrics`: token usage, active threads, model status, compaction count
+
+### 6.6 Maintenance and security hardening
+- [ ] Cleanup of expired/revoked refresh-token rows
 
 ---
 
