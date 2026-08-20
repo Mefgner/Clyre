@@ -42,7 +42,11 @@ class AsyncSessionManager:
 
         self._engine: AsyncEngine = create_async_engine(self._db_url, echo=echo, future=True)
 
-        if env.DB_ENGINE == "sqlite":
+        # sqlite-vec lives in the sqlite dialect only; never register it for a
+        # Postgres/other engine (it has no enable_load_extension). Detect by the
+        # real URL dialect, not the DB_ENGINE env, so the Docker/Postgres path
+        # is safe even when DB_ENGINE is left at its default.
+        if self._engine.dialect.name == "sqlite":
             register_sqlite_vec(self._engine)
 
         self._session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(

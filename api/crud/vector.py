@@ -181,8 +181,13 @@ _repository: VectorRepository | None = None
 def get_vector_repository() -> VectorRepository:
     global _repository
     if _repository is None:
+        # Pick the backend from the live engine dialect, not the DB_ENGINE env:
+        # the Docker/Postgres path must not instantiate the sqlite repository.
+        from db import get_session_manager
+
+        engine = get_session_manager().async_engine
         _repository = (
-            SqliteVecRepository() if env.DB_ENGINE == "sqlite" else PgVectorRepository()
+            SqliteVecRepository() if engine.dialect.name == "sqlite" else PgVectorRepository()
         )
     return _repository
 

@@ -15,7 +15,7 @@ class TelegramRegistrationRequest(BaseModel):
 
 
 class UserRegisterRequest(UserLoginRequest):
-    name: Annotated[str, Len(5, 90)]
+    name: Annotated[str, Len(3, 30)]
 
 
 class __TokenResponse(BaseModel):

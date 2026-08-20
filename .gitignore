@@ -147,6 +147,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Vue/TS build info
+*.tsbuildinfo
+
 # Environments
 .env
 .envrc
