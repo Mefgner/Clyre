@@ -13,7 +13,7 @@ from db import register_sqlite_vec
 from models import Base, FileMetadata, User
 from pipelines.embed import EmbeddingPipeline
 from pipelines.fs import LocalFileStore
-from pipelines.llama import LlamaLLMPipeline
+from pipelines.inference import LLMPipeline
 from services.file import delete_user_file, link_file_with_project, upload_file
 from services.ingestion import index_file_for_project
 from services.project import create_user_project, delete_user_project
@@ -37,11 +37,11 @@ async def _wait_for_embedding_server(base_url: str) -> None:
 
 
 @pytest_asyncio.fixture
-async def embedding_clients() -> AsyncIterator[tuple[EmbeddingPipeline, LlamaLLMPipeline]]:
+async def embedding_clients() -> AsyncIterator[tuple[EmbeddingPipeline, LLMPipeline]]:
     base_url = os.getenv("CLYRE_E2E_EMBEDDING_URL", "http://localhost:6761")
     model = os.getenv("CLYRE_E2E_EMBEDDING_MODEL", "Qwen3-Embedding-0.6B")
     await _wait_for_embedding_server(base_url)
-    yield EmbeddingPipeline(base_url, model), LlamaLLMPipeline(base_url, model)
+    yield EmbeddingPipeline(base_url, model), LLMPipeline(base_url, model)
 
 
 async def _run_file_lifecycle(
@@ -49,7 +49,7 @@ async def _run_file_lifecycle(
     repository: VectorRepository,
     root: Path,
     embedder: EmbeddingPipeline,
-    tokenizer: LlamaLLMPipeline,
+    tokenizer: LLMPipeline,
 ) -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

@@ -14,7 +14,7 @@ from crud import (
 from crud.message import get_last_message_order_in_thread
 from db import get_session_manager
 from models import Message, Thread
-from pipelines.llama import get_llama_pipeline
+from pipelines.inference import Tier, get_inference_pipeline
 from schemas.chatting import StreamingBlock
 from utils import timing
 
@@ -25,7 +25,7 @@ Logger.setLevel(logging.DEBUG)
 class ChattingService:
     @staticmethod
     async def generate_thread_title(message: str) -> str:
-        llama = get_llama_pipeline("")
+        llama = get_inference_pipeline(Tier.SMALL)
         llama_prompt = f"Create a concise and descriptive title for the given message (min. 4 words and up to 6 words (strict), use language of context given below):\n\n{message}\n\nTitle:"
         response_data = await llama.chat_completion_sync(
             [{"role": "user", "content": llama_prompt}],
@@ -83,9 +83,9 @@ class ChattingService:
         return history
 
     async def generate_llm_response(
-        self, session: AsyncSession, thread_id: str, user_id: str, model: str = ""
+        self, session: AsyncSession, thread_id: str, user_id: str
     ) -> tuple[Message, str]:
-        llama = get_llama_pipeline(model)
+        llama = get_inference_pipeline(Tier.SMALL)
         messages = await get_messages_in_thread(session, thread_id, user_id)
         if not messages:
             raise ValueError("Message not found")
@@ -119,7 +119,6 @@ class ChattingService:
         user_id: str,
         message: str,
         get_stop_signal: Callable[[], Awaitable[bool]],
-        model: str = "",
     ):
         _, thread_id = await self.save_message(
             session,
@@ -143,7 +142,7 @@ class ChattingService:
         Logger.debug("Building history for thread_id: %s", thread_id)
 
         history = self.build_history(thread.messages)
-        llama = get_llama_pipeline(model)
+        llama = get_inference_pipeline(Tier.SMALL)
 
         response = ""
         is_assistant_message_saved = False

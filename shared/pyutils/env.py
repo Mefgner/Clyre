@@ -37,19 +37,24 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_DUR_MINUTES: int = 15
     REFRESH_TOKEN_DUR_DAYS: int = 15
 
-    # Llama configuration
-    LLAMA_WIN_HOST: str = "localhost"
-    LLAMA_WIN_PORT: int = 6760
-    LLAMA_URL: str = "http://localhost:6760"
-    LLAMA_MODEL_NAME: str | None = None
+    # Inference tiers. env holds only overrides: the base URL (where the tier is
+    # served) and the model name/alias to send in requests. When unset, values are
+    # resolved from the model catalog (configs/models.yaml) and the local bind
+    # addresses below. BIG_* may be left empty -> it falls back to SMALL_*.
+    SMALL_BASE_URL: str | None = None  # chat + worker steps
+    SMALL_MODEL: str | None = None
+    BIG_BASE_URL: str | None = None  # planner + synthesizer (optional)
+    BIG_MODEL: str | None = None
+    EMBEDDING_BASE_URL: str | None = None  # RAG; required
+    EMBEDDING_MODEL: str | None = None
 
-    # Embedding inference (second llama-server)
-    EMBEDDING_BASE_URL: str = "http://localhost:6761"
-    EMBEDDING_MODEL: str = "Qwen3-Embedding-0.6B"
-
-    # Orchestrator configuration
-    PRIMARY_MODEL_NAME: str | None = None
-    PRIMARY_MODEL_SIZE: str | None = None
+    # Local llama-server bind addresses (desktop launcher)
+    SMALL_BIND_HOST: str = "localhost"
+    SMALL_BIND_PORT: int = 6760
+    BIG_BIND_HOST: str = "localhost"
+    BIG_BIND_PORT: int = 6762
+    EMBEDDING_BIND_HOST: str = "localhost"
+    EMBEDDING_BIND_PORT: int = 6761
 
     # Vector config
     VECTOR_DIM: int = 1024

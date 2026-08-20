@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.vector import VectorIndexMeta
+from pipelines.embed import DEFAULT_EMBEDDING_MODEL
 from utils import env
 
 
@@ -10,7 +11,8 @@ class EmbeddingSpaceMismatch(RuntimeError):
 
 
 def _current() -> tuple[str, int, bool]:
-    return (env.EMBEDDING_MODEL, env.VECTOR_DIM, env.NORMALIZE_VECTORS)
+    model = env.EMBEDDING_MODEL or DEFAULT_EMBEDDING_MODEL
+    return (model, env.VECTOR_DIM, env.NORMALIZE_VECTORS)
 
 
 async def _get(session: AsyncSession) -> VectorIndexMeta | None:

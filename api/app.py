@@ -6,7 +6,7 @@ from starlette.responses import JSONResponse
 # from starlette.middleware.cors import CORSMiddleware
 import db
 from crud.vector import get_vector_repository
-from pipelines import llama
+from pipelines import embed, inference
 from routes import views
 from shared.pyutils.logs import setup_logging
 from utils import env
@@ -64,4 +64,7 @@ app.add_event_handler("startup", _ensure_vector_schema)
 
 # Llama.cpp connection side effect
 
-app.add_event_handler("startup", llama.get_current_llama_pipeline().wait_for_startup)
+app.add_event_handler(
+    "startup", inference.get_inference_pipeline(inference.Tier.SMALL).wait_for_startup
+)
+app.add_event_handler("startup", embed.get_embedding_pipeline().wait_for_startup)

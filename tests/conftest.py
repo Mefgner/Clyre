@@ -8,6 +8,11 @@ os.environ["VECTOR_DIM"] = "8"
 os.environ["NORMALIZE_VECTORS"] = "true"
 os.environ.setdefault("HASHING_SECRET", "test")
 os.environ.setdefault("ACCESS_TOKEN_SECRET", "test")
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/clyre_test.sqlite3")
+os.environ.setdefault("SMALL_BASE_URL", "http://localhost:6760")
+os.environ.setdefault("SMALL_MODEL", "Qwen3.5-9B")
+os.environ.setdefault("EMBEDDING_BASE_URL", "http://localhost:6761")
+os.environ.setdefault("EMBEDDING_MODEL", "Qwen3-Embedding-0.6B")
 
 import pytest
 import pytest_asyncio

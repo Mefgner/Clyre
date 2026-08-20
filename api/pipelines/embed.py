@@ -9,6 +9,10 @@ from utils import env
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
 
+DEFAULT_EMBEDDING_MODEL = "Qwen3-Embedding-0.6B"
+STARTUP_RETRIES = 60
+STARTUP_RETRY_DELAY = 5.0
+
 
 def _normalize(vector: list[float]) -> list[float]:
     norm = math.sqrt(sum(x * x for x in vector))
@@ -58,14 +62,18 @@ class EmbeddingPipeline:
     async def wait_for_startup(self) -> None:
         async with httpx.AsyncClient(timeout=10, transport=self._transport) as client:
             Logger.info("Waiting for the embedding server at %s", self._base_url)
-            while True:
+            for attempt in range(1, STARTUP_RETRIES + 1):
                 try:
                     (await client.get(f"{self._base_url}/health")).raise_for_status()
-                    break
-                except httpx.HTTPStatusError:
-                    await asyncio.sleep(2)
-                except httpx.ConnectError:
-                    await asyncio.sleep(5)
+                    return
+                except (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException):
+                    if attempt == STARTUP_RETRIES:
+                        break
+                    await asyncio.sleep(STARTUP_RETRY_DELAY)
+            raise ConnectionError(
+                f"embedding server at {self._base_url} did not become ready within "
+                f"{STARTUP_RETRIES * STARTUP_RETRY_DELAY:.0f}s"
+            )
 
 
 _embedding_instance: EmbeddingPipeline | None = None
@@ -74,7 +82,11 @@ _embedding_instance: EmbeddingPipeline | None = None
 def get_embedding_pipeline() -> EmbeddingPipeline:
     global _embedding_instance
     if _embedding_instance is None:
-        _embedding_instance = EmbeddingPipeline(env.EMBEDDING_BASE_URL, env.EMBEDDING_MODEL)
+        base_url = env.EMBEDDING_BASE_URL or (
+            f"http://{env.EMBEDDING_BIND_HOST}:{env.EMBEDDING_BIND_PORT}"
+        )
+        model = env.EMBEDDING_MODEL or DEFAULT_EMBEDDING_MODEL
+        _embedding_instance = EmbeddingPipeline(base_url, model)
     return _embedding_instance
 
 

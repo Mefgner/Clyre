@@ -12,13 +12,13 @@ from pathlib import Path
 
 from scripts.build_db_url import build_database_url
 from scripts.downloader import from_files
-from scripts.llama_launcher import start_llama_server
+from scripts.llama_launcher import start_local_servers
 from shared.pyutils.logs import setup_logging
 
 if __name__ == "__main__":
     setup_logging()
     from_files("binaries.yaml", "models.yaml")
-    start_llama_server()
+    start_local_servers()
 
     # Build DATABASE_URL and export it so the API picks it up via env
     os.environ["DATABASE_URL"] = build_database_url()

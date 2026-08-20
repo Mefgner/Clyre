@@ -45,56 +45,55 @@ def get_default_llama_executable() -> Path:
     for b in binaries:
         if b.get("type") == "llama.cpp" and b.get("platform") == sys.platform:
             dest_subdir = b["dest_subdir"]
-            folder = b["folder"]
             executable = b["exe_name"]
-            return get_app_runtime_dir() / dest_subdir / folder / executable
+            base = get_app_runtime_dir() / dest_subdir
+            # Zips are extracted into the `folder` directory (see binaries.yaml),
+            # so the exe normally lives under binaries/<folder>/.
+            folder = b.get("folder")
+            if folder:
+                nested = base / folder / executable
+                if nested.exists():
+                    return nested
+            # Fallback for flat layouts (no folder) or not-yet-extracted state.
+            return base / executable
     raise ValueError("No default llama executable")
 
 
-@lru_cache(maxsize=1)
-def get_default_llama_model_path() -> Path:
-    models = dict_from_yaml(get_app_root_dir() / "configs" / "models.yaml")
-    target = None
-
-    for m in models:
-        if m.get("framework") == "llama":
-            target = m
-            break
-
-    if not target:
-        raise ValueError("No llama.cpp-compatible model found in models.yaml")
-
-    dest_subdir = target["dest_subdir"]
-    filename = target["filename"]
-
-    return (get_app_runtime_dir() / dest_subdir / filename).resolve()
-
-
 @lru_cache(maxsize=16)
-def resolve_llama_model_path(model_name: str) -> str | None:
+def resolve_model_path(model_name: str) -> str:
     models = dict_from_yaml(get_app_root_dir() / "configs" / "models.yaml")
     for m in models:
-        if m.get("name") == model_name and m.get("framework") == "llama":
+        if m.get("name") == model_name:
             dest_subdir = m["dest_subdir"]
             filename = m["filename"]
             return str((get_app_runtime_dir() / dest_subdir / filename).resolve())
-    raise ValueError(f"Model '{model_name}' not found or not compatible with llama.cpp")
+    raise ValueError(f"Model '{model_name}' not found in models.yaml")
 
 
-@lru_cache(maxsize=1)
-def get_default_llama_model_name() -> str:
+@lru_cache(maxsize=16)
+def get_default_model_name_by_role(role: str) -> str:
+    """Return the `name` of the first catalog entry tagged with the given role
+    (small | big | embedding)."""
     models = dict_from_yaml(get_app_root_dir() / "configs" / "models.yaml")
     for m in models:
-        if m.get("framework") == "llama":
+        if m.get("role") == role:
             return m.get("name")
-    raise ValueError("No llama.cpp-compatible model found in models.yaml")
+    raise ValueError(f"No model with role '{role}' found in models.yaml")
+
+
+@lru_cache(maxsize=16)
+def get_default_model_name_by_role_or_none(role: str) -> str | None:
+    try:
+        return get_default_model_name_by_role(role)
+    except ValueError:
+        return None
 
 
 __all__ = [
     "dict_from_yaml",
     "get_app_runtime_dir",
     "get_default_llama_executable",
-    "get_default_llama_model_path",
-    "resolve_llama_model_path",
-    "get_default_llama_model_name",
+    "resolve_model_path",
+    "get_default_model_name_by_role",
+    "get_default_model_name_by_role_or_none",
 ]
