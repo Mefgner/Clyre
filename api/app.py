@@ -1,7 +1,9 @@
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
-from starlette.responses import JSONResponse
+from starlette.responses import FileResponse, JSONResponse
+from starlette.staticfiles import StaticFiles
 
 # from starlette.middleware.cors import CORSMiddleware
 import db
@@ -25,6 +27,33 @@ Logger.info("Pre-downloading necessary files...")
 
 app = FastAPI(title="Clyre API", version=env.CLYRE_VERSION)
 app.include_router(views.api_router, prefix="/api")
+
+# Static web build (web/dist) served on the same origin as the API for both
+# delivery shapes. The SPA fallback below answers non-API routes with index.html.
+
+_APP_ROOT = Path(__file__).resolve().parent.parent
+_DIST_DIR = next(
+    (path for path in (_APP_ROOT / "web" / "dist", _APP_ROOT / "dist") if path.exists()),
+    _APP_ROOT / "dist",
+)
+_DIST_INDEX = _DIST_DIR / "index.html"
+
+if _DIST_INDEX.exists():
+    app.mount("/assets", StaticFiles(directory=_DIST_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        candidate = _DIST_DIR / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_DIST_INDEX)
+
+else:
+    Logger.warning(
+        "Built frontend not found at %s; the API will serve only /api routes. "
+        "Run `npm ci && npm run build` before boot.",
+        _DIST_DIR,
+    )
 
 # origins = [
 #     "http://localhost",

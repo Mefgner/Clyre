@@ -1,5 +1,3 @@
-const unpackBody = (response: any) => response.body
-
 function parseString<T> (line: string) {
   try {
     return JSON.parse(line) as T
@@ -8,45 +6,20 @@ function parseString<T> (line: string) {
   }
 }
 
-export async function* readNDJSONStream<T> (response: any): AsyncGenerator<T> {
-  const body = unpackBody(response)
-
+export async function* readNDJSONStream<T> (body: string): AsyncGenerator<T> {
   if (!body) {
     throw new Error('Empty response')
   }
 
-  const reader = body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
+  const lines = body.split('\n')
 
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
+  for (const line of lines) {
+    const trimmedLine = line.trim()
 
-      if (done) {
-        break
-      }
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmedLine = line.trim()
-
-        if (!trimmedLine) {
-          continue
-        }
-
-        yield parseString<T>(trimmedLine) ?? {} as T
-      }
+    if (!trimmedLine) {
+      continue
     }
 
-    if (buffer.trim() !== '' && !buffer.endsWith('\n') && !buffer.endsWith('\r\n') && !buffer.endsWith('\r')) {
-      yield parseString<T>(buffer) ?? {} as T
-    }
-  } finally {
-    reader.releaseLock()
+    yield parseString<T>(trimmedLine) ?? {} as T
   }
 }

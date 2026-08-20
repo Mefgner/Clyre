@@ -108,12 +108,13 @@ export const useThreadStore = defineStore('thread', () => {
     pushAssistantMessage(response.data.response)
   }
 
-  const getAssistantMessagePipeline = async function* (prompt: string, _: string, accessToken: string, signal: AbortSignal) {
-    const response = await threadRepo.generateAssistantStream(currentThread.value.id, prompt, accessToken, signal)
-
+  const getAssistantMessagePipeline = async function* (prompt: string, _: string, accessToken: string) {
     isGenerating.value = true
     try {
-      for await (const payload of readNDJSONStream<ThreadStreamingPayload>(response)) {
+      const response = await threadRepo.generateAssistantStream(currentThread.value.id, prompt, accessToken)
+      const body = typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+
+      for await (const payload of readNDJSONStream<ThreadStreamingPayload>(body)) {
         switch (payload.event) {
           case 'user_message_insert':
           case 'assistant_message_insert': {
@@ -144,9 +145,8 @@ export const useThreadStore = defineStore('thread', () => {
         yield payload
       }
     } catch (error) {
-      if (!(error instanceof DOMException) || error.name !== 'AbortError') {
-        console.error(error)
-      }
+      console.error('Failed to generate assistant response', error)
+      throw error
     } finally {
       isGenerating.value = false
     }

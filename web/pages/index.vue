@@ -184,8 +184,6 @@
 
   const router = useRouter()
 
-  const abortController = ref(new AbortController())
-
   const intervalId = ref(0)
 
   onMounted(() => {
@@ -227,7 +225,6 @@
 
   async function generateAnswer (prompt: string, mode: string) {
     if (threadStore.isGenerating) {
-      abortController.value.abort()
       return
     }
 
@@ -236,9 +233,7 @@
     if (!accessToken) return
 
     try {
-      abortController.value = new AbortController()
-
-      for await (const payload of threadStore.getAssistantMessagePipeline(prompt, mode, accessToken, abortController.value.signal)) {
+      for await (const payload of threadStore.getAssistantMessagePipeline(prompt, mode, accessToken)) {
         if ((payload.event === 'user_message_insert' || payload.event === 'assistant_message_insert')) {
           threadStore.getThreadsMeta().then(async () => {
             threadStore.setCurrentThread(threadStore.currentThread!)
