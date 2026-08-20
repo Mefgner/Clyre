@@ -1,3 +1,23 @@
+FROM node:22-alpine AS web-build
+
+WORKDIR /app
+
+COPY package.json package-lock.json /app/
+RUN npm ci
+
+COPY web /app/web
+COPY index.html /app/index.html
+COPY vite.config.mts /app/vite.config.mts
+COPY tsconfig.json /app/tsconfig.json
+COPY tsconfig.app.json /app/tsconfig.app.json
+COPY tsconfig.node.json /app/tsconfig.node.json
+COPY env.d.ts /app/env.d.ts
+
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=${VITE_API_URL}
+
+RUN npm run build
+
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -13,6 +33,8 @@ COPY api /app/api
 COPY shared /app/shared
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
+
+COPY --from=web-build /app/dist /app/web/dist
 
 EXPOSE 6750
 

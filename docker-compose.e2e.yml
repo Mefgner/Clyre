@@ -16,7 +16,7 @@ services:
       LLAMA_ARG_HOST: 0.0.0.0
       LLAMA_ARG_PORT: 6761
       LLAMA_ARG_HF_REPO: Qwen/Qwen3-Embedding-0.6B-GGUF
-      LLAMA_ARG_HF_FILE: Qwen3-Embedding-0.6B-Q8_0.gguf
+      LLAMA_ARG_HF_FILE: Qwen3-Embedding-0.6B-Q6_K.gguf
       LLAMA_ARG_EMBEDDINGS: "true"
       LLAMA_ARG_ALIAS: Qwen3-Embedding-0.6B
       LLAMA_ARG_CTX_SIZE: 2048

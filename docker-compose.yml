@@ -12,30 +12,21 @@ services:
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?}
       ACCESS_TOKEN_DUR_MINUTES: 15
       REFRESH_TOKEN_DUR_DAYS: 15
-      LLAMA_URL: http://llama:6760
-      PRIMARY_MODEL_NAME: ${PRIMARY_MODEL_ALIAS:-model}
-      PRIMARY_MODEL_SIZE: small
+      SMALL_BASE_URL: http://llama:6760
+      SMALL_MODEL: ${SMALL_MODEL_ALIAS:-Qwen3.5-9B}
+      EMBEDDING_BASE_URL: http://embedding:6761
     depends_on:
       db:
         condition: service_healthy
       llama:
-        condition: service_started
+        condition: service_healthy
+      embedding:
+        condition: service_healthy
     ports:
       - "6750:6750"
 
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-      args:
-        VITE_API_URL: /api
-    depends_on:
-      - api
-    ports:
-      - "80:80"
-
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: clyre
       POSTGRES_PASSWORD: clyre_secret
@@ -53,17 +44,20 @@ services:
     environment:
       LLAMA_ARG_HOST: 0.0.0.0
       LLAMA_ARG_PORT: 6760
-      # Model auto-download from HuggingFace
-      # HF_HUB_OFFLINE: 1
-      # LLAMA_ARG_ALIAS: ${PRIMARY_MODEL_ALIAS:-model}
-      LLAMA_ARG_HF_REPO: ${PRIMARY_MODEL_HF:-}
-      # LLAMA_ARG_HF_FILE: ${PRIMARY_MODEL_FILE:-}
+      LLAMA_ARG_ALIAS: ${SMALL_MODEL_ALIAS:-Qwen3.5-9B}
+      LLAMA_ARG_HF_REPO: ${SMALL_MODEL_HF:-unsloth/Qwen3.5-9B-GGUF}
+      LLAMA_ARG_HF_FILE: ${SMALL_MODEL_FILE:-Qwen3.5-9B-Q4_K_M.gguf}
       # Inference settings
       LLAMA_ARG_CTX_SIZE: 4096
       LLAMA_ARG_N_GPU_LAYERS: 99
       LLAMA_ARG_BATCH: 1024
       LLAMA_ARG_UBATCH: 512
       LLAMA_ARG_FLASH_ATTN: "on"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6760/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     volumes:
       # HF cache persists downloaded models across restarts
       - llama_cache:/root/.cache
@@ -77,12 +71,37 @@ services:
     ports:
       - "6760:6760"
 
-  # qdrant:
-  #   image: qdrant/qdrant:latest
-  #   volumes:
-  #     - clyre_qdrant:/qdrant/storage
+  embedding:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    environment:
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: 6761
+      LLAMA_ARG_ALIAS: ${EMBEDDING_MODEL_ALIAS:-Qwen3-Embedding-0.6B}
+      LLAMA_ARG_HF_REPO: ${EMBEDDING_MODEL_HF:-Qwen/Qwen3-Embedding-0.6B-GGUF}
+      LLAMA_ARG_HF_FILE: ${EMBEDDING_MODEL_FILE:-Qwen3-Embedding-0.6B-Q8_0.gguf}
+      LLAMA_ARG_EMBEDDINGS: "true"
+      LLAMA_ARG_N_GPU_LAYERS: 0
+      # Inference settings
+      LLAMA_ARG_CTX_SIZE: 2048
+      LLAMA_ARG_BATCH: 256
+      LLAMA_ARG_UBATCH: 256
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6761/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - llama_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "6761:6761"
 
 volumes:
   clyre_pgdata:
   llama_cache:
-  # clyre_qdrant:
