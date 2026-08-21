@@ -64,9 +64,7 @@ async def extract_refresh_token(
         refresh_token = await get_refresh_token_by_hash(session, hashing.hash_content(auth))
         if refresh_token is None or _refresh_token_is_invalid(refresh_token):
             raise ValueError("Refresh token is revoked or expired")
-        created_at = refresh_token.created_at
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timing.get_utc_now().tzinfo)
+        created_at = timing.ensure_utc(refresh_token.created_at)
         return general.TokenPayload(
             user_id=refresh_token.user_id,
             timestamp=created_at.timestamp(),
@@ -99,10 +97,7 @@ def _require_access_claim(payload: general.TokenPayload) -> None:
 def _refresh_token_is_invalid(refresh_token) -> bool:
     if not refresh_token or refresh_token.revoked_at:
         return True
-    expires_at = refresh_token.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timing.get_utc_now().tzinfo)
-    return expires_at < timing.get_utc_now()
+    return timing.ensure_utc(refresh_token.expires_at) < timing.get_utc_now()
 
 
 # def extract_service_token(

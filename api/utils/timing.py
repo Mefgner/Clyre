@@ -2,7 +2,7 @@ import datetime
 
 
 def get_current_timestamp():
-    return datetime.datetime.now().timestamp()
+    return get_utc_now().timestamp()
 
 
 def offset_datetime(from_: datetime.datetime, offset: datetime.timedelta):
@@ -13,8 +13,8 @@ def get_utc_now():
     return datetime.datetime.now(datetime.UTC)
 
 
-def utc_from_iso_str(time_str: str):
-    return datetime.datetime.fromisoformat(time_str).now(datetime.UTC)
+def ensure_utc(dt: datetime.datetime):
+    return dt.replace(tzinfo=datetime.UTC) if dt.tzinfo is None else dt
 
 
 def utc_from_timestamp(timestamp: float):
@@ -22,9 +22,9 @@ def utc_from_timestamp(timestamp: float):
 
 
 __all__ = [
+    "ensure_utc",
     "get_current_timestamp",
     "get_utc_now",
     "offset_datetime",
-    "utc_from_iso_str",
     "utc_from_timestamp",
 ]

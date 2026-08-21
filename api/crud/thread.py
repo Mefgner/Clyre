@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import contains_eager
 
 from models import Message, Thread
-from utils import hashing
+from utils import hashing, timing
 
 
 async def create_thread(
@@ -41,7 +41,7 @@ async def update_thread_time(
     session: AsyncSession, thread: Thread, utc_time: datetime.datetime | None
 ) -> None:
     if not utc_time:
-        utc_time = datetime.datetime.now(datetime.UTC)
+        utc_time = timing.get_utc_now()
     thread.update_time = utc_time
     session.add(thread)
 

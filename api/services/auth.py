@@ -111,9 +111,7 @@ class AuthService:
 
     @staticmethod
     def _is_expired(expires_at):
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timing.get_utc_now().tzinfo)
-        return expires_at < timing.get_utc_now()
+        return timing.ensure_utc(expires_at) < timing.get_utc_now()
 
     # @staticmethod
     # async def register_telegram(
