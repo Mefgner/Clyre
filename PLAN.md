@@ -15,11 +15,11 @@ Checked in order; each maps to the phase that makes it possible.
 - [ ] **M2 — Fast chat.** A question is answered in `fast` mode with streaming, from a local model. *(Phase 2)*
 - [ ] **M3 — Attached files.** A user uploads a file, attaches it to a thread, and the answer uses its full content at a stable position. *(Phase 2)*
 - [ ] **M4 — Compaction.** A thread overflowing the context window is summarized (oldest → summary, recent verbatim) and still answers; the user is notified. *(Phase 2)*
-- [ ] **M5 — Inline tool.** In `fast` mode the model makes one read-only tool call (fetch/search) and answers from the result. *(Phase 2)*
+- [ ] **M5 — Routing.** The fast-mode router classifies a query into plain chat or a registered read-only capability; the capability pipeline runs end to end and the answer uses its result. *(Phase 2)*
 - [ ] **M6 — Projects.** A project groups threads and explicitly linked files can be selected from a listing. *(Phase 3)*
 - [ ] **M7 — Project RAG.** A file is added to a project, indexed in the background, semantic search returns relevant chunks, and the answer uses them. *(Phase 4)*
-- [ ] **M8 — Plan-and-execute.** A `plan` query runs planner → sequential steps → synthesizer and streams progress over SSE. *(Phase 5)*
-- [ ] **M9 — Approval.** A write tool pauses at a human-in-the-loop gate; approve executes, reject fails. *(Phase 5)*
+- [ ] **M8 — Plan-and-execute** *(deferred, post-thesis)*. A `plan` query runs planner → sequential steps → synthesizer and streams progress over SSE. *(Phase 5)*
+- [ ] **M9 — Approval** *(deferred, post-thesis; enforcement of `access: W`)*. A write tool pauses at a human-in-the-loop gate; approve executes, reject fails. *(Phase 5)*
 - [ ] **M10 — Benchmark.** Same queries on OpenCode (agentic) vs Clyre (deterministic), measured: tokens, LLM calls, latency, failure rate. *(Phase 6)*
 - [ ] **M11 — Desktop packaging.** A clean Windows machine without Python installs and runs the packaged app. *(Phase 6)*
 
@@ -105,7 +105,6 @@ Plain async functions, callable by both the chat path and the orchestrator.
 - [x] Resolved via `get_file_store()` (module-level singleton, same shape as the other pipelines)
 
 ### 2.3 File upload + linking endpoints (`api/routes/files/`)
-Detailed steps: `docs/plans/vector-write-path.md`.
 - [x] `POST /api/files/upload` — save file (`project_id = NULL` by default)
 - [x] `GET /api/files/` — list user's files
 - [x] `DELETE /api/files/{file_id}` — purge vectors explicitly, then delete row + blob
@@ -124,10 +123,18 @@ Detailed steps: `docs/plans/vector-write-path.md`.
 - [ ] In `ChattingService.stream_response`: build context from history (compacted) + thread/project-attached files, injected at a **stable position** (never mid-history)
 - [ ] No automatic RAG injection; files enter context only when attached or tool-fetched
 
-### 2.6 L1 — single inline read-only tool call
-- [ ] Allow the model (constrained output) to emit one read-only tool call in the fast path
-- [ ] Execute via the retrieval functions → feed result back → continue generating
-- [ ] Write tools are **not** allowed on the fast path (they force the plan path / approval)
+### 2.6 Fast-mode routing (replaces the inline-tool-call design)
+Full contract: **`docs/plans/tool-contract.md`** — categories, manifest, skeleton, ranking,
+durability, router mechanics. The model never sees raw tools; selection is deterministic.
+- [ ] `@plugin` registry (`api/modules/engine/plugins/`) + dynamic name list for the router
+- [ ] Router: one constrained SMALL-tier classification per message (recent history + registry names) → `chat` | `<plugin>`; multi-intent → plugin priority + honest disclaimer
+- [ ] Thin tools (`fetch_file`, `list_project_files`, `search_project`) stay code-only building blocks for handlers
+- [ ] First thick plugin proves the skeleton (file-oriented capability first; `web_search` follows once its data-source backend is chosen)
+- [ ] Re-entry refinement: parse merges delta over snapshot params; param diff → re-synthesize vs re-collect
+
+### 2.7 Resilient generation
+- [ ] Generation runs as a background asyncio task decoupled from the client connection; chunks persist to DB + replay buffer, reconnecting clients catch up from their last offset
+- [ ] `pipeline_run` stage-boundary snapshots (L1 durability): crash recovery and citation metadata; seed of the deferred checkpoint model
 
 ---
 
@@ -163,7 +170,7 @@ window). No membership table. `project_id` is the only index scope.
 
 The read and write paths are available through the file API — they connect
 `extract_text → chunk_text → embed → ChunkVector + add_chunks`, and `search_project` now
-retrieves from user-owned project scopes. Full implementation plan: **`docs/plans/vector-write-path.md`**.
+retrieves from user-owned project scopes.
 
 ### 4.1 Vector storage abstraction — done
 - [x] Nullable `project_id` on `FileMetadata`
@@ -191,7 +198,7 @@ retrieves from user-owned project scopes. Full implementation plan: **`docs/plan
 ### 4.3 Promotion + search
 - [x] `POST /api/files/{file_id}/link/project/{project_id}` — set `project_id`, schedule ingestion + embedding
 - [x] `search_project` wired through `VectorRepository`, validates the embedding space on read
-- [ ] Available as a tool on the plan path (and optionally L1)
+- [ ] Exposed as the `find_in_project` capability through the tool contract (`docs/plans/tool-contract.md`)
 
 ### 4.4 Embedding-space migration
 The embedder changes over the project's life; that is a first-class operation, not an error.
@@ -219,9 +226,13 @@ Startup migration:
 
 ---
 
-## Phase 5 — L2: the orchestrator (Plan-and-Execute)
+## Phase 5 — L2: the orchestrator (Plan-and-Execute) — **deferred, post-thesis**
 
-Build only after L0/L1 are solid. **Not** ReAct — finite plan, no open loop.
+The fast-mode router (Phase 2) covers thesis-scope capabilities; plan-and-execute and
+approval enforcement move to post-thesis work. Kept below as the target design so the tool
+contract stays forward-compatible. BIG-tier configuration remains in env/code, but its
+processes are not launched until this phase finds it a use. Build only after L0/L1 are
+solid. **Not** ReAct — finite plan, no open loop.
 
 ### 5.1 Engine core
 - [ ] `OrchestratorState` (JSON-serializable): run_id, plan, step outputs, status, history
@@ -274,13 +285,14 @@ Build only after L0/L1 are solid. **Not** ReAct — finite plan, no open loop.
 
 ### 6.2 Thesis evaluation artifacts
 - [ ] Passive top-k RAG vs agentic fetch on 3-5 queries; document the gap
+- [ ] Retrieval quality ladder on a fixed corpus: R1 naive user query vs R2 model-written query (parse-node reformulation) vs R3 multi-query voting; recall/precision metrics (see `docs/plans/tool-contract.md`, Thesis link)
 - [ ] 4B vs 9B on structured output / tool calling; demonstrate why 9B is the floor
 - [ ] Scalability test: concurrent users, streaming throughput, SQLite WAL write concurrency
 - [ ] Edge-device performance: run the benchmark on a consumer GPU, report latency / tokens / VRAM / failure rate
 
 ### 6.3 Deployment
 Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): desktop script vs Docker Compose.
-- [x] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) — b6239 binary + b6595 cudart DLL set, both FLAT zips extracted into one `binaries/<folder>/` so `llama-server.exe` sits next to `ggml-cuda.dll` and the cudart libs; downloader/exe-resolution logic verified against the real archive layout
+- [ ] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) — binary + cudart DLL set, both FLAT zips extracted into one `binaries/<folder>/` so `llama-server.exe` sits next to `ggml-cuda.dll` and the cudart libs; downloader/exe-resolution logic verified against the real archive layout
 - [ ] Host the pinned zips as GitHub Release assets in this repo; first-run downloads from there, not upstream — reproducible install, fixed benchmark runtime, no upstream drift
 - [x] Desktop (household): `run-desktop.py` / PyInstaller spec (`api/`, `scripts/`, `shared/`, `dist/`, `configs/`); first-run downloads the pinned binaries + Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B → generates and persists local secrets → starts llama-server(s) + uvicorn (serving the built frontend) → opens browser; SQLite + sqlite-vec by default; test on a clean Windows machine without Python
 - [x] Team server (Docker Compose): `docker compose up` — `db` (pgvector image) + `clyre` (FastAPI monolith serving the built Vue frontend); llama/embedding services with HF model auto-download and `/health` healthchecks; the API waits for db+llama+embedding to be healthy
