@@ -4,6 +4,11 @@ This plan describes what the finished thesis project looks like. It is a target 
 
 The orchestrator is built **bottom-up**: the spine (L0+L1) is barely more than the current chat; the heavy machinery (L2) is a later, separable phase. Each cross-cutting feature has an explicit trigger — build it when the need is real, not before.
 
+> **Routing pivot.** The model never sees raw tools: fast mode is a deterministic router over
+> fixed-topology capability pipelines (see `docs/plans/tool-contract.md` and ADR-draft 11).
+> Phase 5 (plan-and-execute, approval) is deferred post-thesis; its design is kept for
+> forward compatibility of the tool contract.
+
 ---
 
 ## Milestones
