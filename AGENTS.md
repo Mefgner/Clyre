@@ -17,11 +17,28 @@ Locally-hosted, LLM-powered web app for small teams and households (bachelor the
 - DB: SQLAlchemy (async) — SQLite + sqlite-vec WAL (desktop default); PostgreSQL 16 + pgvector via the same `DB_ENGINE` switch (Docker Compose for teams)
 - Migrations: Alembic
 
+## Models
+- Default chat: Qwen3.5-9B (Q4_K_M). Hard floor: 9B params.
+- Embedding: Qwen3-Embedding-0.6B, `VECTOR_DIM = 1024`.
+- Three tiers (env): `SMALL_*` (chat + worker steps), `BIG_*` (planner + synthesizer; falls back to SMALL — if only one tier is configured, it takes all load), `EMBEDDING_*`. One client class, configured per tier. The BIG tier must stay local (sees full user context).
+
 ## Layout
 Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py` (logic) → `crud/<domain>.py` (queries) → `schemas/<domain>.py` (DTOs) → `models/<domain>.py` (ORM).
 - `api/pipelines/`: inference, summarize, embed, ingest, fs/
 - `api/services/retrieval.py`: `fetch_file` / `list_project_files` / `search_project` — plain async funcs shared by chat and orchestrator
 - `api/modules/orchestrator/`: plan-and-execute engine
+
+## Response pipeline
+`POST /api/chat` (`mode: auto|fast|plan`):
+- **FAST:** compacted history + attached files (stable position) → answer; optional one read-only inline tool call. Streams **NDJSON**.
+- **PLAN:** planner → sequential tool steps → synthesizer. Checkpointed at approval/completion. Progress via **SSE**.
+
+## Context management
+- No passive RAG. Chat scope = whole files + compaction on overflow; project scope = tool-driven fetch; per-project index = embedding retrieval (the only RAG level, behind `VectorRepository`; no global index).
+- Injected context goes at a stable position, never mid-history.
+
+## Orchestrator
+Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` refs; linear plans; verify failure → at most one capped re-plan. Write tools require approval (human-in-the-loop). Worker steps = isolated context on `SMALL`; planner/synthesizer = full context on `BIG`.
 
 ## Conventions
 - Logic in services, queries in crud, `commit()` in services only. `get_db_session` from `api/db.py`.
@@ -36,8 +53,14 @@ Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py
 - Env: copy `configs/base.env` → `.env`
 - Deployment: runtime-agnostic monolith — desktop script (`run-desktop.py`, SQLite default) or `docker compose up` (PostgreSQL + pgvector); `DB_ENGINE`/`DATABASE_URL` select the backend.
 
+## Known issues
+`docs/known-issues.md` lists reviewed weaknesses outside the planned-rework scope. If you
+edit any file mentioned there, read that document first and account for the noted problem:
+fix it if it falls within your change's scope, or at minimum avoid regressing it.
+
+Affected files (backend): `api/app.py`, `api/db.py`, `api/utils/timing.py`, `api/services/chatting.py`, `api/services/auth.py`, `api/services/file.py`, `api/routes/files/views.py`, `api/routes/chatting/views.py`, `api/routes/auth/views.py`, `api/utils/web.py`, `api/pipelines/inference.py`, `api/pipelines/embed.py`, `api/pipelines/fs/store.py`, `alembic/env.py`
+Frontend: `web/components/chat/PrettyMarkdown.vue`, `web/components/chat/PromptBar.vue`, `web/repos/thread.ts`, `web/stores/thread.ts`, `web/stores/auth.ts`, `web/utils/api.ts`, `web/pages/index.vue`, `web/pages/chat.vue`
+Infra/config: `run-desktop.py`, `scripts/llama_launcher.py`, `scripts/build_db_url.py`, `docker-compose.yml`, `pyproject.toml`, `requirements.txt`, `configs/inference.yaml`, `.gitignore`
+
 ## Status
 See `PLAN.md` for the full phased roadmap and what is done vs pending.
-
-## Known weaknesses
-Frontend issues triage (from an outside review, with severity + suggested fix order): `web/FRONTEND_ISSUES.md`. Check it before touching frontend code.
