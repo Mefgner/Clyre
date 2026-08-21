@@ -29,9 +29,11 @@ Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py
 - `api/modules/orchestrator/`: plan-and-execute engine
 
 ## Response pipeline
-`POST /api/chat` (`mode: auto|fast|plan`):
-- **FAST:** compacted history + attached files (stable position) → answer; optional one read-only inline tool call. Streams **NDJSON**.
-- **PLAN:** planner → sequential tool steps → synthesizer. Checkpointed at approval/completion. Progress via **SSE**.
+`POST /api/chat` (`mode: auto|fast|plan`; `plan` deferred post-thesis):
+- **FAST (router):** every message → one constrained SMALL-tier classification (recent history + registry names) → plain chat or a registered capability pipeline (`parse → execute → synthesize`). The model never sees raw tools. Streams **NDJSON**.
+- **PLAN** *(deferred, post-thesis)*: planner → sequential tool steps → synthesizer. Checkpointed at approval/completion. Progress via **SSE**.
+
+Design details: `docs/plans/tool-contract.md`, rationale: ADR-draft 11 (`docs/adr/drafts/11-deterministic-routing.md`).
 
 ## Context management
 - No passive RAG. Chat scope = whole files + compaction on overflow; project scope = tool-driven fetch; per-project index = embedding retrieval (the only RAG level, behind `VectorRepository`; no global index).
