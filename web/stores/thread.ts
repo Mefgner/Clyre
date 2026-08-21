@@ -1,3 +1,14 @@
+// PLAN-NOTE(fe-chat-cache): groundwork exists for a chat-history caching layer,
+// currently dormant. Plan (tracked as §6.4 "Chat history cache" in PLAN.md):
+//   - New dedicated repo (`repos/threadCache.ts` or extend this store) holding a
+//     `ThreadHistoryCache` map (see `entities/thread.ts`) of fully loaded threads.
+//   - `setCurrentThread` / `updateCurrentThread` serve from cache when present;
+//     fetch + fill on miss.
+//   - Invalidation points: after each completed stream (`done` event), on
+//     `deleteCurrentThread`, and on `getThreadsMeta` detecting external changes.
+//   - Keep memory bounded (LRU cap) once pagination (§6.1) lands.
+// The orphaned `ThreadHistoryCache` interface in entities is part of this plan —
+// do not delete it while the plan is open.
 import type {
   ThreadHistory,
   ThreadMessage,

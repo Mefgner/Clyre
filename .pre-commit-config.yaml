@@ -1,6 +1,7 @@
 # Run: poetry run pre-commit install   (activates the git hook)
-# Manual full sweep: poetry run pre-commit run --all-files
-exclude: '^(web/|dist/|build/|public/|telegram-bot/|\.venv/)'
+# Manual full sweep (backend + frontend + tests): poetry run pre-commit run --all-files
+# The frontend hooks below need Node/npm with `npm install` run once in the repo root.
+exclude: '^(dist/|build/|public/|telegram-bot/|\.venv/)'
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -37,7 +38,22 @@ repos:
         args: ["-p", "pyrightconfig.json"]
       - id: pytest
         name: pytest (unit tests)
-        entry: poetry run pytest
+        entry: poetry run pytest -m "not e2e"
         language: system
         pass_filenames: false
         always_run: true
+
+      # Frontend hooks (source lives in web/, tooling in the repo root).
+      # eslint runs with --fix: on the first run it rewrites files on disk and the
+      # commit fails — just `git add` the fixes and commit again.
+      - id: eslint
+        name: eslint (frontend)
+        entry: npx eslint --fix
+        language: system
+        files: ^web/.*\.(ts|vue|js)$|^vite\.config\.mts$
+      - id: vue-tsc
+        name: vue-tsc type-check (whole frontend)
+        entry: npm run type-check
+        language: system
+        pass_filenames: false
+        files: ^web/.*\.(ts|vue)$|^vite\.config\.mts$
