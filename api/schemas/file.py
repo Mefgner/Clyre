@@ -20,4 +20,21 @@ class ChunkResult:
     distance: float
 
 
-__all__ = ["ChunkEmbedding", "ChunkResult"]
+@dataclass(slots=True)
+class FileMeta:
+    id: str
+    name: str
+    content_type: str
+    head_value: str | None
+    index_status: str
+
+
+@dataclass(slots=True)
+class ChunkText:
+    chunk_id: str
+    file_id: str
+    chunk_index: int
+    text: str
+
+
+__all__ = ["ChunkEmbedding", "ChunkResult", "ChunkText", "FileMeta"]

@@ -58,6 +58,28 @@ async def get_project_index_statuses(
     return statuses
 
 
+async def list_project_files(session: AsyncSession, project_id: str) -> list[FileMetadata]:
+    result = await session.execute(
+        select(FileMetadata)
+        .where(FileMetadata.project_id == project_id)
+        .order_by(FileMetadata.name)
+    )
+    return list(result.scalars().all())
+
+
+async def get_owned_file_ids(
+    session: AsyncSession, file_ids: Sequence[str], user_id: str
+) -> set[str]:
+    if not file_ids:
+        return set()
+    result = await session.execute(
+        select(FileMetadata.id).where(
+            FileMetadata.id.in_(file_ids), FileMetadata.user_id == user_id
+        )
+    )
+    return set(result.scalars().all())
+
+
 async def delete_file(session: AsyncSession, file_metadata: FileMetadata) -> None:
     await session.delete(file_metadata)
 
@@ -108,8 +130,10 @@ __all__ = [
     "get_file_for_user",
     "get_project_link",
     "get_project_index_statuses",
+    "get_owned_file_ids",
     "get_thread_link",
     "link_file_to_project",
     "link_file_to_thread",
+    "list_project_files",
     "list_user_files",
 ]
