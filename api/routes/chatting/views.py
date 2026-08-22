@@ -1,16 +1,18 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.responses import StreamingResponse
 
+from crud import get_thread_by_id
 from db import get_db_session
-from schemas.chatting import UserChatRequest, UserChatResponse
+from schemas.chatting import ThreadRequest, UserChatRequest, UserChatResponse
 from schemas.general import TokenPayload
 from services.chatting import ChattingService
+from services.generation import GenerationConflict
 from utils import web
 
 Logger = logging.getLogger(__name__)
@@ -49,12 +51,13 @@ async def stream_response(
     request: UserChatRequest,
     token_payload: Annotated[TokenPayload, Depends(web.extract_access_token)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    background_tasks: BackgroundTasks,
+    offset: int = 0,
 ):
     Logger.info(
-        "chat_response request from %s to thread %s",
+        "chat_stream request from %s to thread %s (offset=%s)",
         token_payload.user_id,
         request.thread_id or "(Create new thread)",
+        offset,
     )
 
     user_id = token_payload.user_id
@@ -62,71 +65,74 @@ async def stream_response(
     message = request.message
 
     try:
-        generator, after_generation_task = await chatting_sc.stream_response(
-            session, thread_id, user_id, message, starlette_request.is_disconnected
+        run = await chatting_sc.start_generation(
+            session,
+            thread_id,
+            user_id,
+            message,
+            enable_thinking=request.enable_thinking,
         )
 
-        background_tasks.add_task(after_generation_task)
+        async def stream():
+            async for line in run.subscribe(offset):
+                yield line
 
-        return StreamingResponse(generator, media_type="application/x-ndjson")
+        return StreamingResponse(stream(), media_type="application/x-ndjson")
+    except GenerationConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError:
         raise HTTPException(status_code=400, detail="Thread not found")
-    except Exception:
-        raise
 
 
-# @chat_router.post("/telegram-response")
-# async def telegram_response(
-#     request: TelegramBotChatRequest,
-#     _: Annotated[None, Depends(web.extract_service_token)],
-#     session: Annotated[AsyncSession, Depends(get_db_session)],
-# ):
-#     try:
-#         user_id = await connection_sc.user_from_telegram(
-#             session, request.telegram_user_id, request.telegram_chat_id
-#         )
-#     except ValueError as exc:
-#         raise HTTPException(
-#             404,
-#             detail="User not found. Please register first or login with your Telegram account.",
-#         ) from exc
-#     Logger.info(
-#         "chat_response (telegram) request from %s to thread %s",
-#         user_id,
-#         request.thread_id or "(Create new thread)",
-#     )
-#     _, thread_id = await chatting_sc.send_message(
-#         session, user_id, request.message, request.thread_id
-#     )
-#     await session.flush()
-#     response = await chatting_sc.generate_llm_response(session, thread_id, user_id)
-#     return {"response": response.inline_value, "thread_id": thread_id}
-#
-#
-# @chat_router.post("/telegram-stream")
-# async def telegram_stream(
-#     request: TelegramBotChatRequest,
-#     _: Annotated[None, Depends(web.extract_service_token)],
-#     session: Annotated[AsyncSession, Depends(get_db_session)],
-# ):
-#     try:
-#         user_id = await connection_sc.user_from_telegram(
-#             session, request.telegram_user_id, request.telegram_chat_id
-#         )
-#     except ValueError as exc:
-#         raise HTTPException(
-#             404,
-#             detail="User not found. Please register first or login with your Telegram account.",
-#         ) from exc
-#     Logger.info(
-#         "chat_stream (telegram) request from %s to thread %s",
-#         user_id,
-#         request.thread_id or "(Create new thread)",
-#     )
-#     _, thread_id = await chatting_sc.send_message(
-#         session, user_id, request.message, request.thread_id
-#     )
-#     await session.flush()
-#     return StreamingResponse(
-#         chatting_sc.stream_response(session, thread_id, user_id), media_type="text/event-stream"
-#     )
+@chat_router.post("/stop")
+async def stop_generation(
+    request: ThreadRequest,
+    token_payload: Annotated[TokenPayload, Depends(web.extract_access_token)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    Logger.info(
+        "chat_stop request from %s for thread %s", token_payload.user_id, request.thread_id
+    )
+
+    thread = await get_thread_by_id(session, request.thread_id, token_payload.user_id)
+    if not thread:
+        Logger.warning(
+            "Stop for foreign or missing thread=%s user=%s",
+            request.thread_id,
+            token_payload.user_id,
+        )
+        raise HTTPException(status_code=404, detail="Thread not found")
+
+    if not chatting_sc.stop_generation(request.thread_id):
+        raise HTTPException(status_code=409, detail="No active generation for this thread")
+
+    return {"result": "stopping"}
+
+
+@chat_router.post("/retry")
+async def retry_generation(
+    request: ThreadRequest,
+    token_payload: Annotated[TokenPayload, Depends(web.extract_access_token)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    Logger.info(
+        "chat_retry request from %s for thread %s", token_payload.user_id, request.thread_id
+    )
+
+    try:
+        run = await chatting_sc.retry_generation(
+            session,
+            request.thread_id,
+            token_payload.user_id,
+            enable_thinking=request.enable_thinking,
+        )
+
+        async def stream():
+            async for line in run.subscribe(0):
+                yield line
+
+        return StreamingResponse(stream(), media_type="application/x-ndjson")
+    except GenerationConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Thread not found")

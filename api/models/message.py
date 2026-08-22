@@ -9,6 +9,7 @@ class Message(Base):
 
     hash = mapped_column(String(64), nullable=False, index=True)
     inline_value = mapped_column(Text, nullable=True)
+    thinking_value = mapped_column(Text, nullable=True)
     role = mapped_column(String(30), nullable=False)
 
     user_id = mapped_column(String(36), ForeignKey("user.id"), nullable=False, index=True)
