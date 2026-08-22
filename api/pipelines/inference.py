@@ -1,8 +1,9 @@
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Literal
 
 import httpx
 
@@ -17,6 +18,48 @@ DEFAULT_SMALL_MODEL = "Qwen3.5-9B"
 
 STARTUP_RETRIES = 60
 STARTUP_RETRY_DELAY = 5.0
+
+ChunkKind = Literal["thinking", "content"]
+
+
+@dataclass(frozen=True)
+class ThinkingWiring:
+    """How one model family toggles thinking on the wire.
+
+    `chat_template_kwargs` is passed through to the jinja chat template;
+    `reasoning_format` tells llama.cpp how to parse reasoning out of the output.
+    Extend THINKING_WIRING as new model families are supported; models without
+    an entry fall back to the server template default (thinking flags omitted).
+    """
+
+    chat_template_kwargs: dict[str, Any] | None = None
+    reasoning_format: str | None = None
+
+
+THINKING_WIRING: dict[str, ThinkingWiring] = {
+    "qwen3": ThinkingWiring(
+        chat_template_kwargs={"enable_thinking": True},
+        reasoning_format="deepseek",
+    ),
+}
+
+
+def _thinking_payload_fields(model_name: str, enable_thinking: bool) -> dict[str, Any]:
+    lowered = model_name.lower()
+    for family, wiring in THINKING_WIRING.items():
+        if family in lowered:
+            if not enable_thinking:
+                # Explicit off: llama.cpp template defaults turn thinking ON for
+                # qwen3, so an omitted flag would silently keep it enabled.
+                return {"chat_template_kwargs": {"enable_thinking": False}}
+            fields: dict[str, Any] = {}
+            if wiring.chat_template_kwargs is not None:
+                fields["chat_template_kwargs"] = wiring.chat_template_kwargs
+            if wiring.reasoning_format is not None:
+                fields["reasoning_format"] = wiring.reasoning_format
+            return fields
+    Logger.debug("No thinking wiring registered for model %s", model_name)
+    return {}
 
 
 class Tier(str, Enum):
@@ -67,22 +110,21 @@ class LLMPipeline:
                     await asyncio.sleep(STARTUP_RETRY_DELAY)
             raise ConnectionError(
                 f"llama.cpp at {self.__base_url} did not become ready within "
-                f"{STARTUP_RETRIES * STARTUP_RETRY_DELAY:.0f}s"
+                f"~{STARTUP_RETRIES * (STARTUP_RETRY_DELAY + 10):.0f}s"
             )
 
     def _build_payload(
         self,
         history: list[dict[str, Any]],
-        max_tokens: int,
         temperature: float,
         stream: bool,
         response_format: dict[str, Any] | None = None,
         grammar: str | None = None,
+        enable_thinking: bool | None = None,
     ):
         payload = {
             "model": self.__model_name,
             "messages": history,
-            "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": stream,
         }
@@ -90,23 +132,27 @@ class LLMPipeline:
             payload["response_format"] = response_format
         if grammar is not None:
             payload["grammar"] = grammar
+        if enable_thinking is not None:
+            payload.update(
+                _thinking_payload_fields(self.__model_name, enable_thinking=enable_thinking)
+            )
         return payload
 
     async def chat_completion_sync(
         self,
         history: list[dict[str, Any]],
-        max_tokens: int = 800,
         temperature: float = 0.7,
         response_format: dict[str, Any] | None = None,
         grammar: str | None = None,
+        enable_thinking: bool | None = None,
     ):
         payload = self._build_payload(
             history,
-            max_tokens,
             temperature,
             stream=False,
             response_format=response_format,
             grammar=grammar,
+            enable_thinking=enable_thinking,
         )
         link = f"{self.__base_url}/v1/chat/completions"
         async with httpx.AsyncClient(timeout=100.0, transport=self.__transport) as client:
@@ -124,32 +170,33 @@ class LLMPipeline:
     async def chat_completion_stream(
         self,
         history: list[dict[str, Any]],
-        max_tokens: int = 800,
         temperature: float = 0.7,
         response_format: dict[str, Any] | None = None,
         grammar: str | None = None,
-    ) -> AsyncGenerator[str, None]:
+        enable_thinking: bool | None = None,
+    ) -> AsyncGenerator[tuple[ChunkKind, str], None]:
+        """Yield (kind, text) pairs; kind is "thinking" or "content"."""
         payload = self._build_payload(
             history,
-            max_tokens,
             temperature,
             stream=True,
             response_format=response_format,
             grammar=grammar,
+            enable_thinking=enable_thinking,
         )
         link = f"{self.__base_url}/v1/chat/completions"
         async with httpx.AsyncClient(timeout=60.0, transport=self.__transport) as client:
             async with client.stream("POST", link, json=payload) as stream:
                 async for line in stream.aiter_lines():
                     try:
-                        formated_chunk = line[6:].strip()
-                        if not formated_chunk:
+                        formatted_chunk = line[6:].strip()
+                        if not formatted_chunk:
                             continue
 
-                        if formated_chunk == "[DONE]":
+                        if formatted_chunk == "[DONE]":
                             break
 
-                        chunk_json: dict[str, Any] = json.loads(formated_chunk)
+                        chunk_json: dict[str, Any] = json.loads(formatted_chunk)
 
                         if len(chunk_json.get("choices", ())) <= 0:
                             if not chunk_json.get("usage") or not chunk_json.get("timings"):
@@ -162,11 +209,17 @@ class LLMPipeline:
                             )
                             continue
 
-                        token: str | None = chunk_json["choices"][0]["delta"].get("content")
+                        delta = chunk_json["choices"][0]["delta"]
+                        reasoning: str | None = delta.get("reasoning_content")
+                        if reasoning:
+                            yield ("thinking", reasoning)
+                            continue
+
+                        token: str | None = delta.get("content")
                         if not token:
                             continue
 
-                        yield token
+                        yield ("content", token)
                     except json.JSONDecodeError:
                         Logger.error("Failed to decode JSON from llama.cpp response (%s)", line)
                         continue

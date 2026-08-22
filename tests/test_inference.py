@@ -89,3 +89,34 @@ async def test_wait_for_startup_returns_when_healthy(monkeypatch):
 
     pipeline = LLMPipeline("http://llama", "model", httpx.MockTransport(handler))
     await pipeline.wait_for_startup()
+
+
+def _payload_for(model_name: str, enable_thinking: bool | None) -> dict:
+    pipeline = LLMPipeline("http://llama", model_name)
+    return pipeline._build_payload(
+        [], temperature=0.7, stream=True, enable_thinking=enable_thinking
+    )
+
+
+def test_build_payload_qwen3_thinking_on():
+    payload = _payload_for("Qwen3.5-4B", True)
+    assert payload["chat_template_kwargs"] == {"enable_thinking": True}
+    assert payload["reasoning_format"] == "deepseek"
+
+
+def test_build_payload_qwen3_thinking_off_is_explicit():
+    # An omitted flag would leave llama.cpp's template default (thinking ON).
+    payload = _payload_for("Qwen3.5-4B", False)
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "reasoning_format" not in payload
+
+
+def test_build_payload_none_keeps_server_default():
+    payload = _payload_for("Qwen3.5-4B", None)
+    assert "chat_template_kwargs" not in payload
+    assert "reasoning_format" not in payload
+
+
+def test_build_payload_unknown_family_ignores_toggle():
+    assert "chat_template_kwargs" not in _payload_for("SomeOther-7B", True)
+    assert "chat_template_kwargs" not in _payload_for("SomeOther-7B", False)
