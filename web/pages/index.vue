@@ -46,7 +46,6 @@
           rounded="xl"
           :to="{ name: 'chat', params: { chatId: chat.id } }"
           :value="chat.id"
-          @click="console.log('link clicked')"
         >
           <template #title>
             <span class="mx-2">
@@ -91,7 +90,7 @@
   </v-navigation-drawer>
 
   <v-app-bar class="bg-transparent blur" density="default">
-    <v-row align="center" :class="'position-relative' + (isMobile ? 'px-5' : 'pa-2')" justify="space-between">
+    <v-row align="center" :class="'position-relative ' + (isMobile ? 'px-5' : 'pa-2')" justify="space-between">
       <div class="position-absolute top-0 left-0 bottom-0 d-flex align-center" :class="isMobile ? 'px-4' : 'px-2'">
         <v-btn v-if="isMobile" class="position-absolute" icon @click="drawer = !drawer"><v-icon>mdi-menu</v-icon></v-btn>
       </div>
@@ -146,12 +145,20 @@
           class="position-absolute bottom-0 w-100 px-4 pb-4"
         >
           <v-fade-transition>
-            <prompt-bar :is-generating="threadStore.isGenerating" @send-message="generateAnswer" />
+            <prompt-bar :is-generating="threadStore.isGenerating" @send-message="generateAnswer" @stop="threadStore.stopGeneration" />
           </v-fade-transition>
         </v-col>
       </v-row>
     </v-container>
   </v-footer>
+
+  <v-snackbar
+    v-model="isSendErrorShown"
+    color="error"
+    :timeout="4000"
+  >
+    {{ sendError }}
+  </v-snackbar>
 </template>
 
 <script lang="ts" setup>
@@ -223,32 +230,48 @@
     uiStore.openDeleteConfirm()
   }
 
-  async function generateAnswer (prompt: string, mode: string) {
-    if (threadStore.isGenerating) {
-      return
-    }
+  const sendError = ref('')
+  const isSendErrorShown = ref(false)
 
-    threadStore.pushUserMessage(prompt)
+  async function generateAnswer (prompt: string, enableThinking = false) {
+    if (threadStore.isGenerating) return
+
     const accessToken = authStore.accessToken
     if (!accessToken) return
 
-    try {
-      for await (const payload of threadStore.getAssistantMessagePipeline(prompt, mode, accessToken)) {
-        if ((payload.event === 'user_message_insert' || payload.event === 'assistant_message_insert')) {
-          threadStore.getThreadsMeta().then(async () => {
-            threadStore.setCurrentThread(threadStore.currentThread!)
+    threadStore.pushUserMessage(prompt)
+    // Capture the target thread object: a mid-send thread switch replaces
+    // currentThread wholesale, and the rollback below must not touch the
+    // unrelated thread the user switched to.
+    const sentThread = threadStore.currentThread
 
-            const nextId = threadStore.currentThread?.id
-            if (nextId) {
-              await router.push({ name: 'chat', params: { chatId: nextId } })
-            } else {
-              console.error('No next chat id')
-            }
-          })
+    try {
+      for await (const payload of threadStore.getAssistantMessagePipeline(prompt, enableThinking)) {
+        if (payload.event === 'user_message_insert') {
+          await threadStore.getThreadsMeta()
+
+          const nextId = threadStore.currentThread?.id
+          if (nextId) {
+            await router.push({ name: 'chat', params: { chatId: nextId } })
+          } else {
+            console.error('No next chat id')
+          }
         }
       }
     } catch (error) {
+      // User-initiated stop aborts the fetch — not an error.
+      if (error instanceof DOMException && error.name === 'AbortError') return
+
       console.error('Failed to generate answer', error)
+      // The server never accepted the message: drop the dangling optimistic
+      // bubble instead of leaving an unanswered message in the thread.
+      const messages = sentThread.messages
+      const lastMessage = messages.at(-1)
+      if (lastMessage?.role === 'user' && lastMessage.content === prompt) {
+        messages.pop()
+      }
+      sendError.value = 'Failed to send the message — please try again.'
+      isSendErrorShown.value = true
     }
   }
 </script>

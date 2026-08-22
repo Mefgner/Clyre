@@ -20,19 +20,23 @@
           @keydown.enter.exact.stop.prevent="emitSendMessage"
         />
       </div>
-      <div class="w-100 d-flex justify-space-between align-end">
-        <v-select
-          v-model="mode"
-          class="flex-grow-0"
-          hide-details
-          :items="modes"
-          :menu-props="{
-            transition: 'slide-y-transition',
-          }"
-          rounded
-          variant="plain"
-        />
-        <v-btn class="pa-0" color="secondary" variant="tonal" @click="emitSendMessage">
+      <div class="w-100 d-flex justify-end align-end">
+        <v-btn
+          class="pa-0 mr-2"
+          :color="thinkingEnabled ? 'secondary' : 'default'"
+          :title="thinkingEnabled ? 'Reasoning on: the model thinks before answering' : 'Reasoning off: instant answer'"
+          variant="tonal"
+          @click="thinkingEnabled = !thinkingEnabled"
+        >
+          <v-icon>mdi-brain</v-icon>
+        </v-btn>
+        <v-btn
+          class="pa-0"
+          color="secondary"
+          :disabled="!isGenerating && !prompt"
+          variant="tonal"
+          @click="onButtonClick"
+        >
           <v-icon>{{ isGenerating ? 'mdi-stop' : 'mdi-send' }}</v-icon>
         </v-btn>
       </div>
@@ -41,29 +45,34 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, onUnmounted, ref, unref, useTemplateRef } from 'vue'
+  import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
   import { useDisplay } from 'vuetify'
 
   const display = useDisplay()
   const isMobile = ref(display.mobile)
 
   const prompt = ref('')
-  const props = withDefaults(
-    defineProps<{ isGenerating: boolean, modes?: string[] }>(),
-    {
-      modes: () => ['Always Quality', 'Prefer Quality', 'Prefer Speed'],
-    },
-  )
+  // Reasoning toggle, default off: Qwen3.5 thinks by default and small-model
+  // reasoning loops can burn the whole context before answering (known issue #18).
+  const thinkingEnabled = ref(false)
+  const props = defineProps<{ isGenerating: boolean }>()
   const promptBarRef = useTemplateRef('promptBarRef')
 
-  const mode = ref(props.modes[0])
-  const emit = defineEmits<{ 'send-message': [prompt: string, mode: string] }>()
+  const emit = defineEmits<{ 'send-message': [prompt: string, enableThinking: boolean], 'stop': [] }>()
 
   function emitSendMessage () {
     if (!prompt.value) return
-    if (!mode.value) return
-    emit('send-message', unref(prompt), unref(mode)!)
+    if (props.isGenerating) return
+    emit('send-message', prompt.value, thinkingEnabled.value)
     prompt.value = ''
+  }
+
+  function onButtonClick () {
+    if (props.isGenerating) {
+      emit('stop')
+      return
+    }
+    emitSendMessage()
   }
 
   function handleTyping (event: KeyboardEvent) {

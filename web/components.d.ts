@@ -20,6 +20,7 @@ declare module 'vue' {
     RegisterModal: typeof import('./components/auth/RegisterModal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ThinkingBlock: typeof import('./components/chat/ThinkingBlock.vue')['default']
     UserPromptBubble: typeof import('./components/chat/UserPromptBubble.vue')['default']
   }
 }

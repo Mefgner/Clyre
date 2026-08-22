@@ -1,6 +1,6 @@
 export type MessageRole = 'user' | 'assistant' | 'thinking' | 'system'
 
-export type StreamingEvents = 'user_message_insert' | 'assistant_message_insert' | 'new_chunk' | 'done' // | 'error'
+export type StreamingEvents = 'user_message_insert' | 'new_thinking_chunk' | 'new_chunk' | 'assistant_message_insert' | 'done' // | 'error'
 
 export interface ThreadMetadata {
   id: string
@@ -11,15 +11,12 @@ export interface ThreadMetadata {
 
 export interface ThreadMessage {
   role: MessageRole
-  content: string
-  // citations?: Array<{
-  //   sourceId: string
-  //   text: string
-  // }>
-  // mode?: 'Quality' | 'Speed'
+  content: string | null
+  thinking?: string | null
 }
 
 export interface ThreadHistory extends ThreadMetadata {
+  isGenerating?: boolean
   messages: ThreadMessage[]
 }
 
