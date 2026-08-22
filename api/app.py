@@ -10,6 +10,7 @@ import db
 from crud.vector import get_vector_repository
 from pipelines import embed, inference
 from routes import views
+from services import generation as services_generation
 from shared.pyutils.logs import setup_logging
 from utils import env
 
@@ -90,6 +91,16 @@ async def _ensure_vector_schema():
 
 
 app.add_event_handler("startup", _ensure_vector_schema)
+
+
+# Crash recovery: journal rows left "running" by a previous process are dead.
+
+
+async def _sweep_interrupted_generations():
+    await services_generation.sweep_interrupted_runs()
+
+
+app.add_event_handler("startup", _sweep_interrupted_generations)
 
 # Llama.cpp connection side effect
 

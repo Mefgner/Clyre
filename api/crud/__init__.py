@@ -15,6 +15,13 @@ from .file import (
     link_file_to_thread,
     list_user_files,
 )
+from .generation import (
+    create_generation_run,
+    finish_generation_run,
+    get_running_generation_runs,
+    get_running_run_for_thread,
+    get_running_run_thread_ids,
+)
 from .message import (
     create_message,
     get_last_message_in_thread,
@@ -50,6 +57,7 @@ from .user import (
 
 __all__ = [
     "create_file",
+    "create_generation_run",
     "create_refresh_token",
     "create_local_connection",
     "create_message",
@@ -58,6 +66,7 @@ __all__ = [
     "create_user",
     "delete_file",
     "delete_project",
+    "finish_generation_run",
     "get_all_user_threads",
     "get_file_for_user",
     "get_last_message_in_thread",
@@ -72,6 +81,9 @@ __all__ = [
     "get_project_ids_for_user",
     "get_project_index_statuses",
     "get_project_link",
+    "get_running_generation_runs",
+    "get_running_run_for_thread",
+    "get_running_run_thread_ids",
     "get_thread_by_id",
     "get_thread_link",
     "get_refresh_token",
