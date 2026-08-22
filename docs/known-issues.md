@@ -41,6 +41,10 @@ No tests for `ChattingService`, `/api/chat/*` (NDJSON wire contract), auth route
 thread routes, files routes, user `/me`. The save-on-disconnect path
 (`api/services/chatting.py:150-224`) is the most intricate code in the backend and is
 uncovered. Cheapest to add before Phase 5.
+Partial progress: the generation core (`/api/chat/stream|stop|retry`, pub/sub,
+start race, finalize failure, crash sweep) now has unit + live e2e coverage
+(`tests/test_chat_stream.py`, `tests/test_generation_unit.py`, `tests_e2e/*`);
+auth/thread/file/user routes remain open.
 
 ### 6. Docker compose hygiene — `docker-compose.yml`
 - Hardcoded `POSTGRES_PASSWORD: clyre_secret` (lines 31-33) while app secrets correctly
@@ -77,10 +81,69 @@ Naive vs aware UTC patched ad hoc at each site (`utils/web.py:68-69,104`,
 naive local time. Consolidate on one aware-UTC helper. Also `utc_from_iso_str`
 (`api/utils/timing.py:16`) is dead and broken (discards the parsed value, returns now).
 
+### 19. Auth error-mapping edge cases — `routes/auth/views.py`,
+`routes/user/views.py`, `utils/web.py`, `utils/hashing.py`
+- Login runs the full registration password policy (`views.py:84`): accounts
+  predating the policy get 422 before credentials are checked. Validate email
+  only on login.
+- Concurrent registers race the existence check → IntegrityError → 500
+  (`views.py:107`); map to 400 "email exists".
+- `routes/user/views.py:34` `except Exception` → 404 "User does not exist"
+  masks DB outages; catch the service ValueError only.
+- `utils/web.py:40` `token_dict["timestamp"]` KeyError → 500 on a signed
+  token without the claim; missing refresh cookie yields 422 instead of 401.
+- `utils/hashing.py:25` catches only VerifyMismatchError: a corrupted stored
+  hash raises InvalidHashError → 500 on login. Catch VerificationError.
+- Dead `session.commit()` after `register_locally` (`views.py:113`) — the
+  service already commits (same ownership confusion as #12).
+
+### 20. Inference client operational assumptions — `pipelines/inference.py`
+- Streaming call uses a flat 60 s timeout (:188), but llama-server is silent
+  during prompt processing; a multi-k-token prompt can exceed it before the
+  first token and ReadTimeout kills a healthy generation. Use connect ~10 s /
+  read ~300 s.
+- `chat_completion_sync` unconditionally reads llama-only `timings`/`id` keys
+  (:161) → KeyError → 500 on any other OpenAI-compatible server after a
+  successful generation; `.get()` them.
+
+### 21. File lifecycle gaps — `services/file.py`, `services/ingestion.py`
+- `delete_user_file` deletes the blob before the commit (:184): a failed
+  commit strands metadata without bytes → later fetches 500 (upload has a
+  compensating delete; delete doesn't).
+- Crash after `link_file_with_project` commits `index_status="pending"`
+  blocks search forever (`ProjectIndexNotReady`, no stale-pending sweep); with
+  `project_ids=None` one stuck file blocks search across all projects.
+- `date.today()` (:64) and direct `datetime.now(UTC)` in ingestion bypass the
+  aware-UTC timing helpers.
+
+### 22. Thinking wiring keyed on model-name substring — `pipelines/inference.py:39-62`
+`_thinking_payload_fields` matches `"qwen3"` inside the configured model
+alias: any renamed GGUF/fine-tune alias silently loses BOTH thinking-off
+control and reasoning separation — thinking stays on by template default
+exactly on constrained calls (titles, future router classification). Resolve
+the family once from config or the server's `/props`; warn when thinking-off
+is requested and no wiring matches.
+
+### 23. Embedding model drift between delivery shapes — `docker-compose.yml:80`,
+`configs/models.yaml`
+Docker downloads `Qwen/...Q8_0`; the desktop catalog downloads
+`PeterAM4/...Q6_K` — same alias, different embedding spaces. Switching shapes
+silently mixes spaces; the `VectorIndexMeta` fingerprint (model + dim) cannot
+distinguish them. Align on one repo/quant or fold the file name into the
+fingerprint.
+
+### 24. Generation wire-contract gaps — `services/chatting.py`, `web/entities/thread.ts`
+- No error/status terminal event: FAILED runs end with plain `done`
+  (`StreamingBlock` has no error kind; entities keep `'error'` commented
+  out), so failures render as empty successes.
+- `start_generation` commits the user message before `_launch`: a
+  journal/reserve failure 500s with the message persisted — resending
+  duplicates it.
+
 ## Low
 
-### 11. Dead Telegram-era code (~200 lines)
-`routes/chatting/views.py:78-132`, `routes/auth/views.py:154-168`,
+### 11. Dead Telegram-era code (~150 lines)
+`routes/auth/views.py:154-168`,
 `services/auth.py:118-142`, `services/connection.py`, commented `extract_service_token`
 (`utils/web.py:108-118`), commented CORS block (`app.py:58-71`). Remove.
 
@@ -112,6 +175,11 @@ driver when `DB_ENGINE=postgresql` — derive runtime per engine.
 - Stray `console.log`s incl. `VITE_API_URL` leak (`utils/api.ts:7`), debug click handler
   (`pages/index.vue:49`), broken class concat `"position-relativepx-5"`
   (`pages/index.vue:94`).
+- `watch` on the messages getter fires only on reference change — no autoscroll
+  while stream chunks append (`pages/chat.vue:16-19`).
+- 60 s threads-meta interval has no catch — backend down means an unhandled
+  rejection every minute (`pages/index.vue:203`).
+- `VITE_API_URL` absent from env docs (runtime falls back to `/api`).
 
 ### 16. Misc backend issues
 - Unbounded `await upload.read()` — no size cap on uploads (`routes/files/views.py:37`);
@@ -125,5 +193,53 @@ driver when `DB_ENGINE=postgresql` — derive runtime per engine.
 - `getattr(raw, "_conn", raw)` pokes private aiosqlite attr (`db.py:27`).
 - File store: direct write instead of temp+rename (`pipelines/fs/store.py:40`); no path
   containment check despite comment claiming defense-in-depth.
-- `.gitignore` lacks `data/`; duplicate modules `schemas/file.py` vs `schemas/files.py`;
+- duplicate modules `schemas/file.py` vs `schemas/files.py`;
   per-module `Logger.setLevel(DEBUG)` fights central logging config.
+
+### 18. Default-thinking generations can exhaust context before any content —
+`services/chatting.py` (`_launch`), `pipelines/inference.py`
+With `enable_thinking` unset, no `chat_template_kwargs`/`reasoning_format` are
+sent and Qwen3.5 thinks by default; on open-ended prompts (e.g. "write a long
+story") the model can spend the whole 4096-token slot on reasoning and emit
+zero content — the run then finishes "successfully" with an empty response and
+thinking-only partials (observed live in e2e: 3974 thinking chunks, 0 content
+chunks). There is no `max_tokens`/thinking-budget guard on the wire. Consider
+capping generation length per request and/or surfacing empty-content runs as
+failed.
+
+### 17. Offset re-subscribe unreachable over HTTP — `routes/chatting/views.py`
+`POST /api/chat/stream` always calls `start_generation`, so a client that
+disconnects mid-stream cannot re-attach to the active run: the second request
+hits `GenerationConflict` (409) and would even duplicate the user message.
+The `offset` replay of `GenerationRun.subscribe` is therefore only reachable at
+the service level today (covered by `tests_e2e/test_generation_pubsub.py`). A
+dedicated attach/re-subscribe endpoint is needed for true reconnect semantics.
+
+### 25. PLAN §6.3 claims undelivered work — `PLAN.md:320`
+Checked desktop-packaging item describes a PyInstaller spec, generated and
+persisted secrets, browser opening, and a clean-Windows test — none exist
+(contradicts M11, unchecked). Rescope the box to what shipped.
+
+### 26. Env template incomplete; empty secrets accepted — `configs/base.env.example`,
+`shared/pyutils/env.py`
+~10 live vars missing from the template (`*_BIND_HOST/_BIND_PORT`, token
+durations, `VECTOR_DB_URL`, `NORMALIZE_VECTORS`, `CHUNK_*`); empty
+`HASHING_SECRET`/`ACCESS_TOKEN_SECRET` satisfy Settings (compose enforces
+`${VAR:?}`, desktop does not). Document the rest; add `min_length=1`.
+
+### 27. e2e stack hygiene — `docker-compose.e2e.yml`, `tests_e2e/`
+No healthchecks and 0.0.0.0 port publishes (an unauthenticated llama pair and
+trivial-credential Postgres exposed LAN-wide during runs); conftest connects
+without a retry; registration depends on internet (DNS MX check → the
+gmail.com workaround); conflict tests burn slow LONG_PROMPT generations just
+to keep a run alive; `test_chat_stream.py:309` pokes httpx private
+`_transport`.
+
+### 28. False-confidence unit tests — `tests/test_chat_stream.py`
+- `test_disconnect_does_not_stop_generation` is vacuous: ASGITransport
+  buffers the whole body, so no real disconnect ever reaches the app (same
+  root cause as the e2e ASGITransport bug). Needs a real-socket (uvicorn)
+  harness or an ASGI wrapper cancelling mid-stream.
+- `flush_partial` failure and partial-content-then-FAILED paths are uncovered.
+- Timing-based sync with ~50 ms margins is flaky on loaded runners; prefer
+  event-gated fakes.

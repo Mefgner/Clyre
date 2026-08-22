@@ -19,13 +19,13 @@ Locally-hosted, LLM-powered web app for small teams and households (bachelor the
 
 ## Layout
 Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py` (logic) → `crud/<domain>.py` (queries) → `schemas/<domain>.py` (DTOs) → `models/<domain>.py` (ORM).
-- `api/pipelines/`: inference, summarize, embed, ingest, fs/
+- `api/pipelines/`: inference, embed, ingest, fs/ (`summarize` planned)
 - `api/services/retrieval.py`: `fetch_file` / `list_project_files` / `search_project` — plain async funcs shared by chat and orchestrator
-- `api/modules/orchestrator/`: plan-and-execute engine
+- `api/modules/orchestrator/`: plan-and-execute engine (planned, not yet created)
 - Frontend under `web/`: `components/` (auto-imported), `pages/`, `stores/` (Pinia), `repos/` (API clients per domain), `entities/`, `plugins/`, `router/`, `utils/`
 
 ## Response pipeline
-`POST /api/chat` (`mode: auto|fast|plan`; `plan` deferred post-thesis):
+`POST /api/chat/stream` today; `mode: auto|fast|plan` request field is planned
 - **FAST (router):** every message → one constrained SMALL-tier classification (recent history + registry names) → plain chat or a registered capability pipeline (`parse → execute → synthesize`). The model never sees raw tools. Streams **NDJSON**.
 - **PLAN** *(deferred, post-thesis)*: planner → sequential tool steps → synthesizer. Checkpointed at approval/completion. Progress via **SSE**.
 
@@ -55,7 +55,7 @@ Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` re
 - Verification: backend — `poetry run ruff check .`, `poetry run black --check .`, `poetry run pytest` (unit-only: `-m "not e2e"`; the `e2e` marker needs live PostgreSQL/llama-server). Frontend — `npm run type-check`.
 - Pre-commit: backend + frontend hooks (eslint `--fix`, vue-tsc, ruff/black/pyright/pytest unit-only); needs Node/npm with `npm install` once. For large or cross-cutting commits always run the full sweep first: `poetry run pre-commit run --all-files`.
 - Migrations: run by launchers before the API starts — `run-desktop.py` and the Dockerfile CMD (`python -m db_migrations`); CLI: `poetry run alembic upgrade head`, new revision: `poetry run alembic revision --autogenerate -m "<msg>"`, verify: `poetry run alembic check`
-- Env: copy `configs/base.env` → `.env`
+- Env: copy `configs/base.env.example` → `.env`
 - Deployment: runtime-agnostic monolith — desktop script (`run-desktop.py`, SQLite default) or `docker compose up` (PostgreSQL + pgvector); `DB_ENGINE`/`DATABASE_URL` select the backend.
 
 ## Known issues

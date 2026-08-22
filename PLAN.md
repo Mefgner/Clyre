@@ -99,10 +99,10 @@ Table stakes for the thesis evaluation. Without it the architecture is not defen
 
 ### 2.1 Retrieval functions (`api/services/retrieval.py`)
 Plain async functions, callable by both the chat path and the orchestrator.
-- [ ] `fetch_file(file_id) -> str`
-- [ ] `list_project_files(project_id) -> list[FileMeta]`
+- [x] `fetch_file(file_id) -> str`
+- [x] `list_project_files(project_id) -> list[FileMeta]`
 - [x] `search_project(query, user_id, project_ids?, k) -> list[ChunkResult]` (validates owned scopes, delegates to `VectorRepository`)
-- [ ] `hydrate_chunks(results) -> list[ChunkText]` — `ChunkResult` carries offsets, not text
+- [x] `hydrate_chunks(results) -> list[ChunkText]` — `ChunkResult` carries offsets, not text
 
 ### 2.2 File system abstraction (`api/pipelines/fs/`)
 - [x] `FileStore` protocol: `save` / `read` / `delete`
@@ -138,8 +138,27 @@ durability, router mechanics. The model never sees raw tools; selection is deter
 - [ ] Re-entry refinement: parse merges delta over snapshot params; param diff → re-synthesize vs re-collect
 
 ### 2.7 Resilient generation
-- [ ] Generation runs as a background asyncio task decoupled from the client connection; chunks persist to DB + replay buffer, reconnecting clients catch up from their last offset
-- [ ] `pipeline_run` stage-boundary snapshots (L1 durability): crash recovery and citation metadata; seed of the deferred checkpoint model
+Generation is decoupled from the client connection: an in-memory run registry per
+thread owns the inference task; clients are subscribers with an offset.
+- [x] `api/services/generation.py`: `GenerationRun` (asyncio task, event buffer,
+  subscriber queues, status `running|finished|stopped|failed|interrupted`); module-level
+  registry `{thread_id: run}`; disconnect kills only the subscriber, never the task
+- [x] Stream endpoint replays buffered events from `offset=N` (exact-once), then goes live
+  (service level; HTTP re-attach pending — known-issues #17)
+- [x] Durable call journal: `generation_run` table (id, thread_id, user_id, status,
+  `side_effects`, timestamps); assistant message row reserved upfront, partial content
+  flushed periodically (~1s), finalized at terminal state; startup sweep marks orphaned
+  `running` rows `interrupted`; `is_generating` exposed in thread metadata
+- [x] **Retry policy** (fixed): live reconnect → true resume from offset
+  (reconnect semantics not yet reachable over HTTP — known-issues #17). Server crash →
+  retry only while `side_effects=False` (fast chat has none by construction); once a W/RW
+  effect has been recorded, retry is forbidden — keep the partial answer and continue the
+  dialog on top. True retry-from-checkpoint arrives with Phase 5 approval gates
+  (`PLAN-NOTE(2.7)` at the `side_effects` field)
+- [x] Send during an active generation → 409 (frontend disables Send until terminal);
+  Stop cancels the task and persists the accumulated partial as the final message
+- [ ] `pipeline_run` stage-boundary snapshots (L1 durability): crash recovery and citation
+  metadata; seed of the deferred checkpoint model — extends `generation_run`, post-M2
 
 ---
 
@@ -292,12 +311,13 @@ solid. **Not** ReAct — finite plan, no open loop.
 - [ ] Passive top-k RAG vs agentic fetch on 3-5 queries; document the gap
 - [ ] Retrieval quality ladder on a fixed corpus: R1 naive user query vs R2 model-written query (parse-node reformulation) vs R3 multi-query voting; recall/precision metrics (see `docs/plans/tool-contract.md`, Thesis link)
 - [ ] 4B vs 9B on structured output / tool calling; demonstrate why 9B is the floor
+- [ ] Thinking on/off benchmark: quality/latency trade-off of `enable_thinking` on fast-mode answers
 - [ ] Scalability test: concurrent users, streaming throughput, SQLite WAL write concurrency
 - [ ] Edge-device performance: run the benchmark on a consumer GPU, report latency / tokens / VRAM / failure rate
 
 ### 6.3 Deployment
 Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): desktop script vs Docker Compose.
-- [ ] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) — binary + cudart DLL set, both FLAT zips extracted into one `binaries/<folder>/` so `llama-server.exe` sits next to `ggml-cuda.dll` and the cudart libs; downloader/exe-resolution logic verified against the real archive layout
+- [x] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) — binary + cudart DLL set, both FLAT zips extracted into one `binaries/<folder>/` so `llama-server.exe` sits next to `ggml-cuda.dll` and the cudart libs; downloader/exe-resolution logic verified against the real archive layout
 - [ ] Host the pinned zips as GitHub Release assets in this repo; first-run downloads from there, not upstream — reproducible install, fixed benchmark runtime, no upstream drift
 - [x] Desktop (household): `run-desktop.py` / PyInstaller spec (`api/`, `scripts/`, `shared/`, `dist/`, `configs/`); first-run downloads the pinned binaries + Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B → generates and persists local secrets → starts llama-server(s) + uvicorn (serving the built frontend) → opens browser; SQLite + sqlite-vec by default; test on a clean Windows machine without Python
 - [x] Team server (Docker Compose): `docker compose up` — `db` (pgvector image) + `clyre` (FastAPI monolith serving the built Vue frontend); llama/embedding services with HF model auto-download and `/health` healthchecks; the API waits for db+llama+embedding to be healthy
@@ -310,6 +330,7 @@ Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): d
 - [ ] Project sidebar
 - [ ] Agent progress stepper with approval dialog
 - [ ] Settings: inference/embedding URLs, model names, `ALLOW_FILE_SUMMARIZATION`, router mode
+- [ ] Thinking toggle in the UI (backend support shipped with M2: `enableThinking` request flag, `new_thinking_chunk` NDJSON event, persisted `Message.thinking_value`; thinking is display-only — never re-sent in history per the Qwen3.5 model card)
 - [ ] PWA: manifest + service worker + icons (`vite-plugin-pwa`) — installable, standalone window, offline shell; works on `localhost` (desktop); on LAN it degrades to a browser tab without a self-signed cert
 
 ### 6.5 Observability
