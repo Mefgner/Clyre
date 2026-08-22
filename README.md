@@ -15,7 +15,7 @@ execution.
 ## Prerequisites
 
 - Python 3.11+ and [Poetry](https://python-poetry.org/)
-- Node.js 20+ and npm
+- Node.js 22+ and npm
 - Enough VRAM for the default chat model (Qwen3.5-9B, ~9B params Q4_K_M)
 
 ## First run (source install)
@@ -92,6 +92,40 @@ Open http://localhost:6750.
 | Frontend build  | `npm run build`                 |
 | Migrations      | `poetry run alembic upgrade head` |
 | New migration   | `poetry run alembic revision --autogenerate -m "<msg>"` |
+
+## Running e2e tests
+
+E2E tests (`tests_e2e/`, marker `e2e`) run on the host against live services
+from `docker-compose.e2e.yml`: PostgreSQL 16 + pgvector, a chat llama-server
+(Qwen3.5-4B, port 6760) and the embedding server (port 6761). The llama servers
+run in HF offline mode and reuse the production `clyre_llama_cache` volume, so
+nothing is downloaded at test time. Note: the main stack downloads the 9B chat
+model — the 4B the e2e stack needs must be fetched into the volume once:
+
+```bash
+# One-time warmup of the shared model cache (embedding model comes from the
+# main stack: `docker compose up embedding` once, or repeat with
+# Qwen/Qwen3-Embedding-0.6B-GGUF:Qwen3-Embedding-0.6B-Q8_0.gguf below):
+docker run --rm -d --name clyre-e2e-warmup -p 127.0.0.1:6799:6799 \
+  -v clyre_llama_cache:/root/.cache ghcr.io/ggml-org/llama.cpp:server \
+  -hf unsloth/Qwen3.5-4B-GGUF:Qwen3.5-4B-UD-Q3_K_XL.gguf --host 0.0.0.0 --port 6799
+curl --retry 60 --retry-delay 3 --retry-connrefused -fsS http://127.0.0.1:6799/health
+docker rm -f clyre-e2e-warmup
+```
+
+Both stacks publish ports 6760/6761 — stop one before starting the other.
+
+```bash
+docker compose -f docker-compose.e2e.yml up -d          # CPU llama servers
+docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.gpu.yml up -d  # GPU
+poetry run pytest tests_e2e -m e2e
+```
+
+Overrides (optional): `CLYRE_E2E_DATABASE_URL`, `CLYRE_E2E_CHAT_URL`,
+`CLYRE_E2E_EMBEDDING_URL`, `CLYRE_E2E_EMBEDDING_MODEL`, `E2E_LLAMA_IMAGE`
+and `E2E_N_GPU_LAYERS` (GPU offload for both llama servers). Tear down with
+`docker compose -f docker-compose.e2e.yml down` (the model cache lives in the
+production stack's `clyre_llama_cache` volume and is kept).
 
 ## Configuration
 

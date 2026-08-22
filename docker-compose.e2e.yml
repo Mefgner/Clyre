@@ -1,4 +1,50 @@
+# Distinct project name so the e2e stack never collides with the production
+# docker-compose.yml project ("clyre") in Docker Desktop.
+name: clyre-e2e
+
 services:
+  chat:
+    image: ${E2E_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    environment:
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: 6760
+      # Reuse the production llama_cache HF cache volume instead of downloading
+      # (see README "Running e2e tests"). Offline mode forces the cache: no
+      # get_repo_commit network round-trip, which fails on flaky links.
+      LLAMA_ARG_HF_REPO: unsloth/Qwen3.5-4B-GGUF
+      LLAMA_ARG_HF_FILE: Qwen3.5-4B-UD-Q3_K_XL.gguf
+      LLAMA_ARG_ALIAS: Qwen3.5-4B
+      LLAMA_ARG_OFFLINE: "1"
+      LLAMA_ARG_CTX_SIZE: 4096
+      LLAMA_ARG_BATCH: 512
+      LLAMA_ARG_UBATCH: 256
+      LLAMA_ARG_N_GPU_LAYERS: ${E2E_N_GPU_LAYERS:-0}
+      LLAMA_ARG_FLASH_ATTN: "off"
+    ports:
+      - "6760:6760"
+    volumes:
+      - llama_cache:/root/.cache
+
+  embedding:
+    image: ${E2E_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    environment:
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: 6761
+      LLAMA_ARG_HF_REPO: Qwen/Qwen3-Embedding-0.6B-GGUF
+      LLAMA_ARG_HF_FILE: Qwen3-Embedding-0.6B-Q8_0.gguf
+      LLAMA_ARG_EMBEDDINGS: "true"
+      LLAMA_ARG_ALIAS: Qwen3-Embedding-0.6B
+      LLAMA_ARG_OFFLINE: "1"
+      LLAMA_ARG_CTX_SIZE: 2048
+      LLAMA_ARG_BATCH: 512
+      LLAMA_ARG_UBATCH: 256
+      LLAMA_ARG_N_GPU_LAYERS: ${E2E_N_GPU_LAYERS:-0}
+      LLAMA_ARG_FLASH_ATTN: "off"
+    ports:
+      - "6761:6761"
+    volumes:
+      - llama_cache:/root/.cache
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -10,25 +56,8 @@ services:
     volumes:
       - clyre_e2e_pgdata:/var/lib/postgresql/data
 
-  embedding:
-    image: ${E2E_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
-    environment:
-      LLAMA_ARG_HOST: 0.0.0.0
-      LLAMA_ARG_PORT: 6761
-      LLAMA_ARG_HF_REPO: Qwen/Qwen3-Embedding-0.6B-GGUF
-      LLAMA_ARG_HF_FILE: Qwen3-Embedding-0.6B-Q6_K.gguf
-      LLAMA_ARG_EMBEDDINGS: "true"
-      LLAMA_ARG_ALIAS: Qwen3-Embedding-0.6B
-      LLAMA_ARG_CTX_SIZE: 2048
-      LLAMA_ARG_BATCH: 512
-      LLAMA_ARG_UBATCH: 256
-      LLAMA_ARG_N_GPU_LAYERS: ${E2E_N_GPU_LAYERS:-0}
-      LLAMA_ARG_FLASH_ATTN: "off"
-    ports:
-      - "6761:6761"
-    volumes:
-      - clyre_e2e_llama_cache:/root/.cache
-
 volumes:
   clyre_e2e_pgdata:
-  clyre_e2e_llama_cache:
+  llama_cache:
+    external: true
+    name: clyre_llama_cache

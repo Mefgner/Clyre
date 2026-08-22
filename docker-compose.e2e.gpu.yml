@@ -1,0 +1,30 @@
+# GPU overlay for the e2e stack. Requires the NVIDIA Container Toolkit.
+# Usage:
+#   docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.gpu.yml up -d
+# The chat server runs the CUDA image and offloads all layers by default
+# (override with E2E_N_GPU_LAYERS); the embedding server only switches to
+# the CUDA image and stays on CPU offload, matching the production stack.
+
+services:
+  chat:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    environment:
+      LLAMA_ARG_N_GPU_LAYERS: ${E2E_N_GPU_LAYERS:-99}
+      LLAMA_ARG_FLASH_ATTN: "on"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  embedding:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
