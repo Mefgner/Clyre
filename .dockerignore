@@ -10,3 +10,11 @@ build
 .env
 *.log
 *.sqlite3
+
+# Clyre local data + caches (privacy: user uploads must not reach the daemon)
+data/
+.pytest_cache/
+.ruff_cache/
+tests/
+tests_e2e/
+docs/

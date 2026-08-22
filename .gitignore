@@ -1,3 +1,6 @@
+# === Clyre local data (desktop DB, downloaded models) ===
+data/
+
 # === Node.js / Frontend ===
 node_modules/
 /dist
