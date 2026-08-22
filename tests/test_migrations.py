@@ -11,6 +11,7 @@ _EXPECTED_TABLES = {
     "file_has_project",
     "file_has_thread",
     "file_metadata",
+    "generation_run",
     "local_connection",
     "message",
     "project",

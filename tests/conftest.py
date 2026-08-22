@@ -9,19 +9,22 @@ os.environ["NORMALIZE_VECTORS"] = "true"
 os.environ.setdefault("HASHING_SECRET", "test")
 os.environ.setdefault("ACCESS_TOKEN_SECRET", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/clyre_test.sqlite3")
+# The app-level session manager resolves the URL against cwd; make sure the
+# directory exists before any test opens it.
+os.makedirs("data", exist_ok=True)
 os.environ.setdefault("SMALL_BASE_URL", "http://localhost:6760")
 os.environ.setdefault("SMALL_MODEL", "Qwen3.5-9B")
 os.environ.setdefault("EMBEDDING_BASE_URL", "http://localhost:6761")
 os.environ.setdefault("EMBEDDING_MODEL", "Qwen3-Embedding-0.6B")
 
-import pytest
-import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
-from crud.vector import SqliteVecRepository
-from db import register_sqlite_vec
-from models import Base, ChunkVector, FileMetadata, User
-from schemas.file import ChunkEmbedding
+from crud.vector import SqliteVecRepository  # noqa: E402
+from db import register_sqlite_vec  # noqa: E402
+from models import Base, ChunkVector, FileMetadata, User  # noqa: E402
+from schemas.file import ChunkEmbedding  # noqa: E402
 
 DIM = 8
 
@@ -53,6 +56,19 @@ async def session(engine):
 @pytest.fixture
 def repo():
     return SqliteVecRepository()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _clean_generation_registry():
+    """The generation registry is module-global; a done (or worse, RUNNING)
+    run leaked from a failed test would poison every later test."""
+    import services.generation as generation_module
+
+    yield
+    for handle in generation_module._eviction_timers.values():
+        handle.cancel()
+    generation_module._eviction_timers.clear()
+    generation_module._runs.clear()
 
 
 @pytest.fixture
