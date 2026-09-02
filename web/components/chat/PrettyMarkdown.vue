@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import DOMPurify from 'dompurify'
   import hljs from 'highlight.js'
   import { Marked } from 'marked'
   import { markedHighlight } from 'marked-highlight'
@@ -42,7 +43,10 @@
 
   const rendered = computed(() => {
     if (!props.value) return ''
-    return markedParser.parse(props.value)
+    // Model output is untrusted: sanitize before v-html, otherwise injected
+    // HTML/JS executes in the app origin that holds the Bearer token (#1).
+    const html = markedParser.parse(props.value, { async: false })
+    return DOMPurify.sanitize(html)
   })
 </script>
 
