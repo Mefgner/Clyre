@@ -1,12 +1,15 @@
 # SMALL — chat + worker steps. Downloaded on first run. This is the default
 # tier; env SMALL_MODEL/SMALL_BASE_URL override only the route, not the catalog.
 # Qwen3.5-9B (Q4_K_M).
-- filename: "Qwen3.5-9B-Q4_K_M.gguf"
-  name: "Qwen3.5-9B"
-  role: small
-  url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf"
-  sha256: "sha256:03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
-  dest_subdir: models/
+# DEV(4GB VRAM box): commented out so the first-run download skips ~5.5 GB;
+# restore before thesis benchmarks (hard floor 9B). SMALL_MODEL in .env
+# currently selects the 4B TEST entry below.
+# - filename: "Qwen3.5-9B-Q4_K_M.gguf"
+#   name: "Qwen3.5-9B"
+#   role: small
+#   url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf"
+#   sha256: "sha256:03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+#   dest_subdir: models/
 
 # EMBEDDING — RAG only. Downloaded on first run.
 # Qwen3-Embedding-0.6B (Q6_K).
@@ -31,9 +34,9 @@
 # TEST — lightweight chat model for e2e/CI runs on machines without enough
 # VRAM for Qwen3.5-9B. Uncomment to make the desktop launcher download it
 # alongside the tiers above; point SMALL_MODEL/SMALL_BASE_URL at it for tests.
-# - filename: "Qwen3.5-4B-UD-Q3_K_XL.gguf"
-#   name: "Qwen3.5-4B"
-#   role: test
-#   url: "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-UD-Q3_K_XL.gguf"
-#   sha256: "sha256:1874727e4bb6ac23fd0cd134ac6562d2759fe44f37fa68c55197b36526da4e37"
-#   dest_subdir: models/
+- filename: "Qwen3.5-4B-UD-Q3_K_XL.gguf"
+  name: "Qwen3.5-4B"
+  role: test
+  url: "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-UD-Q3_K_XL.gguf"
+  sha256: "sha256:1874727e4bb6ac23fd0cd134ac6562d2759fe44f37fa68c55197b36526da4e37"
+  dest_subdir: models/
