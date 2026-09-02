@@ -13,6 +13,11 @@ Logger.setLevel(logging.INFO)
 
 _LOCAL_HOSTS = {"", "localhost", "127.0.0.1", "0.0.0.0", "::1"}
 
+# Per-process stdout/stderr logs. Piping would freeze llama-server once the
+# OS pipe buffer fills (nobody drains it) — files are append-only and free
+# (known-issues #4). Same cwd-relative convention as ./data/files.
+_LOG_DIR = Path("data/logs")
+
 
 def _is_local_url(url: str | None) -> bool:
     """True when a URL is unset (local default) or points at this host."""
@@ -56,6 +61,7 @@ def start_server(
     executable_path: Path,
     host: str,
     port: int,
+    log_name: str,
     embeddings: bool = False,
 ) -> Popen:
     command = build_llama_command(
@@ -66,9 +72,36 @@ def start_server(
         embeddings=embeddings,
     )
     Logger.info("Starting llama.cpp server: %s", " ".join(command))
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    Logger.info("Started llama.cpp with pid %d", process.pid)
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_path = _LOG_DIR / f"llama-{log_name}.log"
+    log_file = log_path.open("ab")
+    try:
+        process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT)
+    finally:
+        log_file.close()  # the child inherited its own handle at spawn
+    Logger.info("Started llama.cpp with pid %d (log: %s)", process.pid, log_path)
     return process
+
+
+def stop_local_servers(processes: list[Popen]) -> None:
+    """Terminate llama-server children started by `start_local_servers`.
+
+    Only the desktop launcher owns these processes; without this, a Ctrl+C
+    or a crash leaves orphans holding ports 6760-6762 and VRAM
+    (known-issues #4). The launcher is a console app, so a hard console-window
+    close bypasses this path — job-object cleanup is deferred to M11 packaging.
+    """
+    for process in processes:
+        if process.poll() is not None:
+            continue
+        Logger.info("Terminating llama-server pid %d", process.pid)
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            Logger.warning("llama-server pid %d ignored terminate; killing", process.pid)
+            process.kill()
+            process.wait(timeout=5)
 
 
 def start_local_servers() -> list[Popen]:
@@ -92,6 +125,7 @@ def start_local_servers() -> list[Popen]:
                 executable_path=executable_path,
                 host=settings.SMALL_BIND_HOST,
                 port=settings.SMALL_BIND_PORT,
+                log_name="small",
             )
         )
         os.environ["SMALL_MODEL"] = small_model
@@ -107,6 +141,7 @@ def start_local_servers() -> list[Popen]:
                 executable_path=executable_path,
                 host=settings.EMBEDDING_BIND_HOST,
                 port=settings.EMBEDDING_BIND_PORT,
+                log_name="embedding",
                 embeddings=True,
             )
         )
@@ -121,6 +156,7 @@ def start_local_servers() -> list[Popen]:
                 executable_path=executable_path,
                 host=settings.BIG_BIND_HOST,
                 port=settings.BIG_BIND_PORT,
+                log_name="big",
             )
         )
         os.environ["BIG_MODEL"] = big_model

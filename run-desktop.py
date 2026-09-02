@@ -12,26 +12,33 @@ from pathlib import Path
 
 from scripts.build_db_url import build_database_url
 from scripts.downloader import from_files
-from scripts.llama_launcher import start_local_servers
+from scripts.llama_launcher import start_local_servers, stop_local_servers
 from shared.pyutils.logs import setup_logging
 
 if __name__ == "__main__":
     setup_logging()
     from_files("binaries.yaml", "models.yaml")
-    start_local_servers()
 
-    # Build DATABASE_URL and export it so the API picks it up via env
-    os.environ["DATABASE_URL"] = build_database_url()
+    # Owned by this launcher for its whole lifetime; uvicorn never touches
+    # them (known-issues #4 — orphaned llama-server held ports and VRAM).
+    llama_processes = []
+    try:
+        llama_processes = start_local_servers()
 
-    # Add api/ to sys.path so internal imports (from app, from utils, etc.) work
-    api_dir = Path(__file__).parent / "api"
-    sys.path.insert(0, str(api_dir))
+        # Build DATABASE_URL and export it so the API picks it up via env
+        os.environ["DATABASE_URL"] = build_database_url()
 
-    # Apply schema migrations before the API accepts any request
-    import db_migrations
+        # Add api/ to sys.path so internal imports (from app, from utils, etc.) work
+        api_dir = Path(__file__).parent / "api"
+        sys.path.insert(0, str(api_dir))
 
-    db_migrations.run_migrations()
+        # Apply schema migrations before the API accepts any request
+        import db_migrations
 
-    from api.main import main
+        db_migrations.run_migrations()
 
-    main()
+        from api.main import main
+
+        main()
+    finally:
+        stop_local_servers(llama_processes)
