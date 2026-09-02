@@ -8,31 +8,38 @@ Status markers: `[ ]` open, `[x]` fixed.
 
 ## Critical
 
-### 1. XSS via unsanitized markdown rendering — `web/components/chat/PrettyMarkdown.vue:50`
+### 1. [x] XSS via unsanitized markdown rendering — `web/components/chat/PrettyMarkdown.vue:50`
 `v-html="rendered"` renders LLM output through `marked` with no DOMPurify. Any HTML/JS
 injected into model output executes in the app origin (which holds the Bearer token).
 Fix: `DOMPurify.sanitize(markedParser.parse(...))`.
 
-### 2. Path traversal in SPA fallback — `api/app.py:44-49`
+### 2. [x] Path traversal in SPA fallback — `api/app.py:44-49`
 `candidate = _DIST_DIR / full_path` has no containment check before `FileResponse`.
 A request like `GET /..%2f..%2f.env` escapes `web/dist`. Real exposure on the Docker /
 team-server shape. Fix: `candidate.resolve()` + verify it is under `_DIST_DIR.resolve()`.
 
-### 3. Chat "streaming" is not streaming — `web/repos/thread.ts:25-30`, `stores/thread.ts`
+### 3. [x] Chat "streaming" is not streaming — `web/repos/thread.ts:25-30`, `stores/thread.ts`
 Axios (`responseType: 'text'`) buffers the entire NDJSON body before first paint; the
 stop button does nothing; there is no `AbortController` anywhere. Additionally,
 switching threads mid-generation splices old messages onto the new thread and streams
 tokens into the wrong view (`stores/thread.ts:52-57`). Fix: `fetch` +
 `response.body.getReader()` with an incremental line buffer, per-request abort, and
 binding stream output to a thread id.
+_Closed by the streaming rework (`501ca4d`, `b5af770`): `repos/thread.ts` uses raw
+`fetch` + `AbortController`, `utils/stream.ts` does incremental NDJSON line buffering,
+`stores/thread.ts` binds output to `activeStreamThreadId` and Stop is wired._
 
-### 4. llama-server subprocess handling — `scripts/llama_launcher.py:69`, `run-desktop.py`
+### 4. [x] llama-server subprocess handling — `scripts/llama_launcher.py:69`, `run-desktop.py`
 - stdout/stderr are piped but never drained → OS pipe buffer fills (~64 KB) and
   llama-server freezes; surfaces as a misleading `ConnectionError` after 300 s.
 - Returned `Popen` handles are discarded; no terminate/kill/atexit anywhere → orphaned
   processes hold ports 6760–6762 and VRAM after Ctrl+C or crash.
 Fix: redirect to log files / DEVNULL and wrap startup-to-shutdown in try/finally that
 terminates and waits on every child (process group / job object on Windows).
+_Logs go to `data/logs/llama-<tier>.log`; `run-desktop.py` owns the children in a
+try/finally around `stop_local_servers` (terminate → wait(10) → kill). Hard
+console-window close / task-kill can still orphan — job-object cleanup deferred
+to M11 packaging._
 
 ## Medium
 
