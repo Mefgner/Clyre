@@ -40,12 +40,15 @@ _DIST_DIR = next(
 _DIST_INDEX = _DIST_DIR / "index.html"
 
 if _DIST_INDEX.exists():
+    _DIST_ROOT = _DIST_DIR.resolve()
     app.mount("/assets", StaticFiles(directory=_DIST_DIR / "assets"), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
-        candidate = _DIST_DIR / full_path
-        if full_path and candidate.is_file():
+        candidate = (_DIST_DIR / full_path).resolve()
+        # Containment: percent-decoded "../" segments must not escape the build
+        # dir (known-issues #2); anything outside falls back to index.html.
+        if full_path and candidate.is_relative_to(_DIST_ROOT) and candidate.is_file():
             return FileResponse(candidate)
         return FileResponse(_DIST_INDEX)
 

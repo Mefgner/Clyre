@@ -2,6 +2,7 @@ import importlib
 import os
 import sys
 
+import httpx
 import pytest
 
 from shared.pyutils.base import get_app_root_dir
@@ -53,3 +54,25 @@ def test_app_serves_built_frontend_when_present(app_module):
     assert dist_dir.is_dir()
     assert any(route.path.startswith("/assets") for route in app.routes)
     assert any(getattr(route, "path", None) == "/{full_path:path}" for route in app.routes)
+
+
+async def test_spa_fallback_blocks_path_traversal(app_module):
+    # known-issues #2: percent-encoded "../" segments used to escape web/dist
+    # and serve arbitrary repo files (e.g. .env) through the SPA fallback.
+    dist_index = getattr(app_module, "_DIST_INDEX", None)
+    if dist_index is None or not dist_index.exists():
+        pytest.skip("built frontend not present; run `npm run build` first")
+
+    index_html = dist_index.read_text(encoding="utf-8")
+    transport = httpx.ASGITransport(app=app_module.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+        one_up = await http.get("/%2e%2e/package.json")
+        two_up = await http.get("/%2e%2e/%2e%2e/pyproject.toml")
+        legit = await http.get("/index.html")
+
+    for response in (one_up, two_up):
+        assert response.status_code == 200
+        assert response.text == index_html
+    assert "devDependencies" not in one_up.text
+    assert "[tool.black]" not in two_up.text
+    assert legit.text == index_html
