@@ -26,7 +26,7 @@ def verify_password(stored_hash: str, password: str) -> bool:
     try:
         ph.verify(stored_hash, password)
         return True
-    except argon2.exceptions.VerifyMismatchError:
+    except argon2.exceptions.VerificationError:
         return False
 
 
