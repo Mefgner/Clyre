@@ -77,8 +77,13 @@ else:
 
 @app.exception_handler(Exception)
 async def handle_exception(request, exc):
-    Logger.error("Unhandled exception: \n%s\n\n Request: %s", exc, request, exc_info=True)
-    return JSONResponse({"error": str(exc)}, status_code=500)
+    Logger.error(
+        "Unhandled exception for %s %s",
+        request.method,
+        request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 # DB engine startup side effect
