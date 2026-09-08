@@ -7,6 +7,7 @@ import yaml
 
 from scripts.utils import cfg
 from shared.pyutils.base import get_app_root_dir
+from shared.pyutils.env import Settings
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
@@ -66,6 +67,48 @@ def from_yaml(config_path: Path) -> list[str]:
     return all_downloads
 
 
+def _select_model_items(
+    models: list[dict[str, str]], settings: Settings
+) -> list[dict[str, str]]:
+    """Select only model files needed by the current desktop mode.
+
+    Normal mode downloads SMALL + EMBEDDING (+ BIG when present). TEST_MODE swaps
+    the default SMALL role for TEST and skips the default BIG tier. Explicit model
+    overrides remain authoritative and are included when they exist in the catalog.
+    """
+    default_roles = {"embedding", "test" if settings.TEST_MODE else "small"}
+    if not settings.TEST_MODE:
+        default_roles.add("big")
+
+    explicit_names = {
+        name
+        for name in (settings.SMALL_MODEL, settings.EMBEDDING_MODEL, settings.BIG_MODEL)
+        if name
+    }
+
+    return [
+        model
+        for model in models
+        if model.get("role") in default_roles or model.get("name") in explicit_names
+    ]
+
+
+def from_model_catalog(settings: Settings | None = None) -> list[str]:
+    settings = settings or Settings()
+    config_path = get_app_root_dir() / "configs" / "models.yaml"
+    with open(config_path, encoding="utf-8") as file:
+        models: list[dict[str, str]] = yaml.load(file, Loader=yaml.FullLoader)
+
+    all_downloads: list[str] = []
+    for item in _select_model_items(models, settings):
+        downloaded = download_from_config(item)
+        if isinstance(downloaded, list):
+            all_downloads.extend(downloaded)
+        else:
+            all_downloads.append(downloaded)
+    return all_downloads
+
+
 def from_files(*files: str) -> list[str]:
     all_downloads: list[str] = []
 
@@ -76,4 +119,9 @@ def from_files(*files: str) -> list[str]:
     return all_downloads
 
 
-__all__ = ["download_from_config", "from_yaml", "from_files"]
+__all__ = [
+    "download_from_config",
+    "from_yaml",
+    "from_model_catalog",
+    "from_files",
+]
