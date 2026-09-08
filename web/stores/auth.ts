@@ -5,12 +5,20 @@ import { AuthRepo } from '@/repos/auth.ts'
 
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(null)
+  let refreshPromise: Promise<void> | null = null
 
   const isLoggedIn = computed(() => accessToken.value !== null)
 
   const refreshAccessToken = async () => {
-    const response = await AuthRepo.refreshToken()
-    accessToken.value = response.data.token
+    if (!refreshPromise) {
+      refreshPromise = (async () => {
+        const response = await AuthRepo.refreshToken()
+        accessToken.value = response.data.token
+      })().finally(() => {
+        refreshPromise = null
+      })
+    }
+    return refreshPromise
   }
 
   const login = async (credentials: AuthCredentials) => {
@@ -34,8 +42,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = async () => {
-    await AuthRepo.logout()
-    accessToken.value = null
+    try {
+      await AuthRepo.logout()
+    } finally {
+      accessToken.value = null
+    }
   }
 
   return { accessToken, isLoggedIn, login, register, refreshAccessToken, logout }
