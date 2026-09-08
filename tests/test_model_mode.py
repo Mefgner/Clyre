@@ -1,7 +1,8 @@
 from types import SimpleNamespace
+from typing import cast
 
 from scripts.downloader import _select_model_items
-
+from shared.pyutils.env import Settings
 
 MODELS = [
     {"name": "prod-small", "role": "small"},
@@ -11,7 +12,7 @@ MODELS = [
 ]
 
 
-def _settings(**overrides):
+def _settings(**overrides) -> Settings:
     values = {
         "TEST_MODE": False,
         "SMALL_MODEL": None,
@@ -19,7 +20,7 @@ def _settings(**overrides):
         "BIG_MODEL": None,
     }
     values.update(overrides)
-    return SimpleNamespace(**values)
+    return cast(Settings, SimpleNamespace(**values))
 
 
 def _names(items):
