@@ -7,6 +7,7 @@ import yaml
 
 from scripts.utils import cfg
 from shared.pyutils.base import get_app_root_dir
+from shared.pyutils.env import Settings
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
@@ -66,6 +67,64 @@ def from_yaml(config_path: Path) -> list[str]:
     return all_downloads
 
 
+def _model_name_by_role(models: list[dict[str, str]], role: str) -> str:
+    for model in models:
+        if model.get("role") == role:
+            return model["name"]
+    raise ValueError(f"No model with role '{role}' found in models.yaml")
+
+
+def _model_name_by_role_or_none(
+    models: list[dict[str, str]], role: str
+) -> str | None:
+    try:
+        return _model_name_by_role(models, role)
+    except ValueError:
+        return None
+
+
+def _select_model_items(
+    models: list[dict[str, str]], settings: Settings
+) -> list[dict[str, str]]:
+    """Select exactly the catalog entries used by the current desktop mode.
+
+    Normal mode resolves SMALL + EMBEDDING (+ optional BIG). TEST_MODE swaps the
+    default SMALL role for TEST and disables the default BIG tier. Explicit
+    *_MODEL overrides remain authoritative and replace, rather than supplement,
+    their role defaults.
+    """
+    small_role = "test" if settings.TEST_MODE else "small"
+    selected_names = {
+        settings.SMALL_MODEL or _model_name_by_role(models, small_role),
+        settings.EMBEDDING_MODEL or _model_name_by_role(models, "embedding"),
+    }
+
+    if settings.BIG_MODEL:
+        selected_names.add(settings.BIG_MODEL)
+    elif not settings.TEST_MODE:
+        default_big = _model_name_by_role_or_none(models, "big")
+        if default_big:
+            selected_names.add(default_big)
+
+    return [model for model in models if model.get("name") in selected_names]
+
+
+def from_model_catalog(settings: Settings | None = None) -> list[str]:
+    settings = settings or Settings()
+    config_path = get_app_root_dir() / "configs" / "models.yaml"
+    with open(config_path, encoding="utf-8") as file:
+        models: list[dict[str, str]] = yaml.load(file, Loader=yaml.FullLoader)
+
+    all_downloads: list[str] = []
+    for item in _select_model_items(models, settings):
+        downloaded = download_from_config(item)
+        if isinstance(downloaded, list):
+            all_downloads.extend(downloaded)
+        else:
+            all_downloads.append(downloaded)
+    return all_downloads
+
+
 def from_files(*files: str) -> list[str]:
     all_downloads: list[str] = []
 
@@ -76,4 +135,9 @@ def from_files(*files: str) -> list[str]:
     return all_downloads
 
 
-__all__ = ["download_from_config", "from_yaml", "from_files"]
+__all__ = [
+    "download_from_config",
+    "from_yaml",
+    "from_model_catalog",
+    "from_files",
+]

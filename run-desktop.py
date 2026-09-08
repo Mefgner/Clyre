@@ -11,13 +11,16 @@ import sys
 from pathlib import Path
 
 from scripts.build_db_url import build_database_url
-from scripts.downloader import from_files
+from scripts.downloader import from_files, from_model_catalog
 from scripts.llama_launcher import start_local_servers, stop_local_servers
+from shared.pyutils.env import Settings
 from shared.pyutils.logs import setup_logging
 
 if __name__ == "__main__":
     setup_logging()
-    from_files("binaries.yaml", "models.yaml")
+    settings = Settings()
+    from_files("binaries.yaml")
+    from_model_catalog(settings)
 
     # Owned by this launcher for its whole lifetime; uvicorn never touches
     # them (known-issues #4 — orphaned llama-server held ports and VRAM).

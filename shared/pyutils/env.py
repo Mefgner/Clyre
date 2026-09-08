@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # General configuration
     CLYRE_VERSION: str = "0.0.1"
     DEBUG: bool = False
+    TEST_MODE: bool = False
 
     # Server configuration
     HOST: str = "localhost"

@@ -108,9 +108,9 @@ def start_local_servers() -> list[Popen]:
     """Start the local llama-server processes for every required tier and export
     the resolved model aliases to the environment for the API to pick up.
 
-    SMALL and EMBEDDING are always started (chat + RAG are required). BIG is
-    optional: it is started only when a model is configured for it and it points
-    at a local process; otherwise the API falls back to SMALL.
+    SMALL and EMBEDDING are always started (chat + RAG are required). In
+    TEST_MODE the default SMALL role is replaced by TEST and the default BIG tier
+    is disabled. Explicit *_MODEL overrides remain authoritative.
     """
     settings = Settings()
     executable_path = cfg.get_default_llama_executable()
@@ -118,7 +118,10 @@ def start_local_servers() -> list[Popen]:
 
     small_url = settings.SMALL_BASE_URL
     if _is_local_url(small_url):
-        small_model = settings.SMALL_MODEL or cfg.get_default_model_name_by_role("small")
+        default_small_role = "test" if settings.TEST_MODE else "small"
+        small_model = settings.SMALL_MODEL or cfg.get_default_model_name_by_role(
+            default_small_role
+        )
         processes.append(
             start_server(
                 small_model,
@@ -147,7 +150,10 @@ def start_local_servers() -> list[Popen]:
         )
         os.environ["EMBEDDING_MODEL"] = embedding_model
 
-    big_model = settings.BIG_MODEL or cfg.get_default_model_name_by_role_or_none("big")
+    default_big = None
+    if not settings.TEST_MODE:
+        default_big = cfg.get_default_model_name_by_role_or_none("big")
+    big_model = settings.BIG_MODEL or default_big
     big_url = settings.BIG_BASE_URL
     if big_model and _is_local_url(big_url):
         processes.append(
