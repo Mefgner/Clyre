@@ -5,6 +5,7 @@ from typing import Annotated
 from email_validator import EmailNotValidError, validate_email
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.params import Body, Depends
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import get_db_session
@@ -26,15 +27,18 @@ auth_router = APIRouter(tags=["auth"])
 auth_sc = AuthService()
 
 
-def check_auth(auth_data: UserLoginRequest):
+def check_login(auth_data: UserLoginRequest) -> None:
     try:
-        if not validate_email(auth_data.email):
-            raise HTTPException(status_code=422, detail="Invalid email")
-    except EmailNotValidError:
-        raise HTTPException(status_code=422, detail="Invalid email")
+        validate_email(auth_data.email)
+    except EmailNotValidError as exc:
+        raise HTTPException(status_code=422, detail="Invalid email") from exc
 
     if not auth_data.password:
         raise HTTPException(status_code=422, detail="Password is required")
+
+
+def check_register(auth_data: UserRegisterRequest) -> None:
+    check_login(auth_data)
 
     if len(auth_data.password) < 8:
         raise HTTPException(
@@ -59,10 +63,6 @@ def check_auth(auth_data: UserLoginRequest):
             status_code=422, detail="Password must contain at least one special character"
         )
 
-
-def check_register(auth_data: UserRegisterRequest):
-    check_auth(auth_data)
-
     if len(auth_data.name) not in range(3, 31):
         raise HTTPException(
             status_code=422, detail="Name must be between 3 and 30 characters long"
@@ -80,8 +80,7 @@ async def login(
     login_data: Annotated[UserLoginRequest, Body()],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-
-    check_auth(login_data)
+    check_login(login_data)
 
     try:
         Logger.info("Processing login request from %s", login_data.email or "unknown user")
@@ -90,9 +89,9 @@ async def login(
             "refresh_token", refresh.token, expires=refresh.expires, httponly=True
         )
         return LoginResponse(token=access.token)
-    except ValueError as e:
-        Logger.error("Login failed for %s: %s", login_data.email or "unknown user", e)
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as exc:
+        Logger.info("Login rejected for %s", login_data.email or "unknown user")
+        raise HTTPException(status_code=400, detail="Invalid credentials") from exc
 
 
 @auth_router.post("/register", response_model=RegisterResponse, status_code=201)
@@ -101,7 +100,6 @@ async def register(
     registration_data: Annotated[UserRegisterRequest, Body()],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-
     check_register(registration_data)
 
     try:
@@ -109,16 +107,17 @@ async def register(
         access, refresh = await auth_sc.register_locally(
             session, **registration_data.model_dump()
         )
-
-        await session.commit()
-
         response.set_cookie(
             "refresh_token", refresh.token, expires=refresh.expires, httponly=True
         )
         return RegisterResponse(token=access.token)
-    except ValueError as e:
-        Logger.error("Registration failed for %s: %s", registration_data.email, e)
-        raise HTTPException(status_code=400, detail=str(e))
+    except IntegrityError as exc:
+        await session.rollback()
+        Logger.info("Registration conflict for %s", registration_data.email)
+        raise HTTPException(status_code=400, detail="Email already exists") from exc
+    except ValueError as exc:
+        Logger.info("Registration rejected for %s: %s", registration_data.email, exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @auth_router.post("/logout", response_model=LogoutResponse, status_code=200)
