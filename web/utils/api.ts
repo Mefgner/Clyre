@@ -35,8 +35,7 @@ apiClient.interceptors.response.use(
       try {
         authStore.accessToken = null
         await authStore.refreshAccessToken()
-        originalRequest.headers = originalRequest.headers ?? {}
-        originalRequest.headers.Authorization = `Bearer ${authStore.accessToken}`
+        // apiClient() runs request interceptors again, which attaches the new token.
         return apiClient(originalRequest)
       } catch {
         try {
