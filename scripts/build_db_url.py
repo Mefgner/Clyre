@@ -1,12 +1,21 @@
 import logging
-import re
+from pathlib import Path
 
 from scripts.utils.cfg import get_app_runtime_dir
 from shared.pyutils.env import Settings
 
 Logger = logging.getLogger(__name__)
 
-_DB_PATH_PATTERN = re.compile(r"^\.(/\w+)+(\.\w{2,})?$")
+
+def _resolve_sqlite_path(raw_path: str) -> Path:
+    normalized = raw_path.replace("\\", "/")
+    path = Path(normalized)
+    if not path.is_absolute():
+        path = get_app_runtime_dir() / path
+    path = path.resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(exist_ok=True)
+    return path
 
 
 def build_database_url(settings: Settings | None = None) -> str:
@@ -24,22 +33,20 @@ def build_database_url(settings: Settings | None = None) -> str:
         return s.DATABASE_URL
 
     engine = s.DB_ENGINE
-    runtime = s.DB_RUNTIME
 
     if engine == "sqlite":
-        db_path = s.DESKTOP_DB_PATH
-        if _DB_PATH_PATTERN.match(db_path):
-            resolved = get_app_runtime_dir() / db_path
-            resolved.parent.mkdir(parents=True, exist_ok=True)
-            resolved.touch(exist_ok=True)
-            db_path = resolved.as_posix()
-
-        url = f"{engine}+{runtime}:///{db_path}"
+        runtime = s.DB_RUNTIME or "aiosqlite"
+        db_path = _resolve_sqlite_path(s.DESKTOP_DB_PATH).as_posix()
+        url = f"sqlite+{runtime}:///{db_path}"
         Logger.info("Built SQLite DATABASE_URL: %s", url)
         return url
 
-    # PostgreSQL, MySQL, etc.
-    url = f"{engine}+{runtime}://{s.DESKTOP_DB_PATH}"
+    runtime = s.DB_RUNTIME
+    if engine == "postgresql" and runtime == "aiosqlite":
+        runtime = "asyncpg"
+
+    driver = f"+{runtime}" if runtime else ""
+    url = f"{engine}{driver}://{s.DESKTOP_DB_PATH}"
     Logger.info("Built DATABASE_URL: %s", url)
     return url
 
