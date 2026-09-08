@@ -46,8 +46,6 @@ if _DIST_INDEX.exists():
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
         candidate = (_DIST_DIR / full_path).resolve()
-        # Containment: percent-decoded "../" segments must not escape the build
-        # dir (known-issues #2); anything outside falls back to index.html.
         if full_path and candidate.is_relative_to(_DIST_ROOT) and candidate.is_file():
             return FileResponse(candidate)
         return FileResponse(_DIST_INDEX)
@@ -58,21 +56,6 @@ else:
         "Run `npm ci && npm run build` before boot.",
         _DIST_DIR,
     )
-
-# origins = [
-#     "http://localhost",
-#     "http://localhost:3000",
-#     "http://0.0.0.0",
-#     "http://192.168.137.1:3000",
-# ]
-
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=origins,
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
 
 
 @app.exception_handler(Exception)
@@ -86,12 +69,8 @@ async def handle_exception(request, exc):
     return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
-# DB engine startup side effect
-
+app.add_event_handler("shutdown", inference.close_inference_pipelines)
 app.add_event_handler("shutdown", db.get_session_manager().close)
-
-
-# Vector store schema (lives outside the ORM; created by the VectorRepository)
 
 
 async def _ensure_vector_schema():
@@ -101,17 +80,11 @@ async def _ensure_vector_schema():
 app.add_event_handler("startup", _ensure_vector_schema)
 
 
-# Crash recovery: journal rows left "running" by a previous process are dead.
-
-
 async def _sweep_interrupted_generations():
     await services_generation.sweep_interrupted_runs()
 
 
 app.add_event_handler("startup", _sweep_interrupted_generations)
-
-# Llama.cpp connection side effect
-
 app.add_event_handler(
     "startup", inference.get_inference_pipeline(inference.Tier.SMALL).wait_for_startup
 )
