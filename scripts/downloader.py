@@ -67,30 +67,46 @@ def from_yaml(config_path: Path) -> list[str]:
     return all_downloads
 
 
+def _model_name_by_role(models: list[dict[str, str]], role: str) -> str:
+    for model in models:
+        if model.get("role") == role:
+            return model["name"]
+    raise ValueError(f"No model with role '{role}' found in models.yaml")
+
+
+def _model_name_by_role_or_none(
+    models: list[dict[str, str]], role: str
+) -> str | None:
+    try:
+        return _model_name_by_role(models, role)
+    except ValueError:
+        return None
+
+
 def _select_model_items(
     models: list[dict[str, str]], settings: Settings
 ) -> list[dict[str, str]]:
-    """Select only model files needed by the current desktop mode.
+    """Select exactly the catalog entries used by the current desktop mode.
 
-    Normal mode downloads SMALL + EMBEDDING (+ BIG when present). TEST_MODE swaps
-    the default SMALL role for TEST and skips the default BIG tier. Explicit model
-    overrides remain authoritative and are included when they exist in the catalog.
+    Normal mode resolves SMALL + EMBEDDING (+ optional BIG). TEST_MODE swaps the
+    default SMALL role for TEST and disables the default BIG tier. Explicit
+    *_MODEL overrides remain authoritative and replace, rather than supplement,
+    their role defaults.
     """
-    default_roles = {"embedding", "test" if settings.TEST_MODE else "small"}
-    if not settings.TEST_MODE:
-        default_roles.add("big")
-
-    explicit_names = {
-        name
-        for name in (settings.SMALL_MODEL, settings.EMBEDDING_MODEL, settings.BIG_MODEL)
-        if name
+    small_role = "test" if settings.TEST_MODE else "small"
+    selected_names = {
+        settings.SMALL_MODEL or _model_name_by_role(models, small_role),
+        settings.EMBEDDING_MODEL or _model_name_by_role(models, "embedding"),
     }
 
-    return [
-        model
-        for model in models
-        if model.get("role") in default_roles or model.get("name") in explicit_names
-    ]
+    if settings.BIG_MODEL:
+        selected_names.add(settings.BIG_MODEL)
+    elif not settings.TEST_MODE:
+        default_big = _model_name_by_role_or_none(models, "big")
+        if default_big:
+            selected_names.add(default_big)
+
+    return [model for model in models if model.get("name") in selected_names]
 
 
 def from_model_catalog(settings: Settings | None = None) -> list[str]:
