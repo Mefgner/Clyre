@@ -50,16 +50,18 @@ async def extract_access_token(
         if _refresh_token_is_invalid(refresh_token) or refresh_token.user_id != payload.user_id:
             raise ValueError("Refresh token is revoked or expired")
         return payload
-    except (OverflowError, TypeError, ValueError) as exc:
+    except (KeyError, OverflowError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=401, detail="Invalid access token, token expired or malformed"
         ) from exc
 
 
 async def extract_refresh_token(
-    auth: Annotated[str, Cookie(alias="refresh_token")],
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    auth: Annotated[str | None, Cookie(alias="refresh_token")] = None,
 ):
+    if auth is None:
+        raise HTTPException(status_code=401, detail="Refresh token is required")
     try:
         refresh_token = await get_refresh_token_by_hash(session, hashing.hash_content(auth))
         if refresh_token is None or _refresh_token_is_invalid(refresh_token):
@@ -83,7 +85,7 @@ async def extract_optional_refresh_token(
     if auth is None:
         return None
     try:
-        return await extract_refresh_token(auth, session)
+        return await extract_refresh_token(session, auth)
     except HTTPException:
         # Logout is idempotent even if the browser presents an expired token.
         return None
