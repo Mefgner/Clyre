@@ -1,6 +1,7 @@
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Annotated
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from shared.pyutils.base import get_app_root_dir
@@ -10,6 +11,9 @@ def env_file():
     prod_env = get_app_root_dir() / ".env"
     if prod_env.exists():
         return prod_env
+
+
+NonEmptySecret = Annotated[str, Field(min_length=1)]
 
 
 class Settings(BaseSettings):
@@ -31,9 +35,10 @@ class Settings(BaseSettings):
     # File storage (raw uploaded bytes; relative paths anchor to the app root)
     FILES_DIR: str = "./data/files"
 
-    # Hashing
-    HASHING_SECRET: str
-    ACCESS_TOKEN_SECRET: str
+    # Hashing / auth secrets must be present and non-empty. Compose already
+    # enforces this; desktop Settings now has the same invariant.
+    HASHING_SECRET: NonEmptySecret
+    ACCESS_TOKEN_SECRET: NonEmptySecret
     # SERVICE_SECRET: str = "forbidden"  # Deprecated telegram bot access
     ACCESS_TOKEN_DUR_MINUTES: int = 15
     REFRESH_TOKEN_DUR_DAYS: int = 15
