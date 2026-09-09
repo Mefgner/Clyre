@@ -63,10 +63,15 @@ Table stakes for the thesis evaluation. Without it the architecture is not defen
 - [x] Rename `api/pipelines/llama.py` → `inference.py`, `LlamaLLMPipeline` → `LLMPipeline`
 - [x] `chat_completion_*` accept `content` as `str | list` (multimodal)
 - [x] Add constrained-decoding support (`response_format` / grammar) for structured outputs
-- [x] Env, three model tiers: `SMALL_*` (chat + worker steps), `BIG_*` (planner + synthesizer), `EMBEDDING_*` (a different model kind; needed for RAG). Fallback: if only one of SMALL/BIG is set, it takes all load; neither set → `RuntimeError` at startup. Old `LLAMA_*`/`PRIMARY_*`/`SYNTHESIS_*` were renamed outright (no deprecated aliases); `docker-compose.yml` and `env.py` use the new names
-- [x] `LLMPipeline` resolves the endpoint by role; one client class, configured instances per tier (`get_inference_pipeline(Tier)`); embedding stays a separate `EmbeddingPipeline`
+- [x] Env exposes two model endpoints: `CHAT_*` for every cognitive role and
+  `EMBEDDING_*` for RAG. The earlier `SMALL_*` / `BIG_*` split was removed outright (no
+  deprecated aliases) by ADR-12 because a separate large model contradicts the edge target
+- [x] One `LLMPipeline` instance serves the chat endpoint; embedding stays a separate
+  `EmbeddingPipeline`. Role-specific behavior is expressed through call parameters and,
+  when needed, logical profiles rather than physical model tiers
 - [x] Fix `wait_for_startup` — max retry count (60 × 5s), raise after (both `inference.py` and `embed.py`)
-- [x] `scripts/llama_launcher.py` — launch `llama-server` per local tier: by default **two** (small 6760, embed 6761); a third only if `BIG_BASE_URL` points at a local process
+- [x] `scripts/llama_launcher.py` launches exactly two local `llama-server` processes:
+  chat on 6760 and embedding on 6761
 - [x] `configs/models.yaml` — replace Qwen3-4B with Qwen3.5-9B (Q4_K_M); add Qwen3-Embedding-0.6B (Q6_K). Model catalog is the source of truth (`role:` field); `.env` holds only route overrides. The catalog contains only fields needed for download, selection and launch.
 - [x] `configs/inference.yaml` — drop 4GB/6GB; profiles for 8/12/16/24GB tuned for Qwen3.5-9B
 - [x] Set `VECTOR_DIM = 1024` (Qwen3-Embedding-0.6B native)
@@ -132,7 +137,7 @@ Plain async functions, callable by both the chat path and the orchestrator.
 Full contract: **`docs/plans/tool-contract.md`** — categories, manifest, skeleton, ranking,
 durability, router mechanics. The model never sees raw tools; selection is deterministic.
 - [ ] `@plugin` registry (`api/modules/engine/plugins/`) + dynamic name list for the router
-- [ ] Router: one constrained SMALL-tier classification per message (recent history + registry names) → `chat` | `<plugin>`; multi-intent → plugin priority + honest disclaimer
+- [ ] Router: one constrained chat-model classification per message (recent history + registry names) → `chat` | `<plugin>`; multi-intent → plugin priority + honest disclaimer
 - [ ] Thin tools (`fetch_file`, `list_project_files`, `search_project`) stay code-only building blocks for handlers
 - [ ] First thick plugin proves the skeleton (file-oriented capability first; `web_search` follows once its data-source backend is chosen)
 - [ ] Re-entry refinement: parse merges delta over snapshot params; param diff → re-synthesize vs re-collect
@@ -201,7 +206,8 @@ retrieves from user-owned project scopes.
 - [x] `VectorRepository` protocol: `ensure_schema` / `add_chunks` / `delete_by_file` / `search_similar_chunks`
 - [x] `PgVectorRepository` (pgvector `<=>`, HNSW index)
 - [x] `SqliteVecRepository` (sqlite-vec `vec0` virtual table, extension loaded in `db.register_sqlite_vec`)
-- [x] Selected by `DB_ENGINE`; `ensure_schema` runs as an `app.py` startup handler
+- [x] Selected from the live SQLAlchemy engine dialect (`DB_ENGINE`/`DATABASE_URL`
+  configure the engine); `ensure_schema` runs as an `app.py` startup handler
 - [x] `VectorIndexMeta` + `services/embedding_space.py` — guards against mixing embedding spaces
 
 ### 4.2 Ingestion + embedding
@@ -254,17 +260,18 @@ Startup migration:
 
 The fast-mode router (Phase 2) covers thesis-scope capabilities; plan-and-execute and
 approval enforcement move to post-thesis work. Kept below as the target design so the tool
-contract stays forward-compatible. BIG-tier configuration remains in env/code, but its
-processes are not launched until this phase finds it a use. Build only after L0/L1 are
-solid. **Not** ReAct — finite plan, no open loop.
+contract stays forward-compatible. Every cognitive role uses the same chat model; separate
+call profiles may vary prompts and generation parameters. Build only after L0/L1 are solid.
+**Not** ReAct — finite plan, no open loop.
 
 ### 5.1 Engine core
 - [ ] `OrchestratorState` (JSON-serializable): run_id, plan, step outputs, status, history
 - [ ] `Step`: id, tool, input (may hold `$stepN.field` refs), status, output
 - [ ] `engine.py`: sequential step execution; engine resolves `$stepN` refs before each call
-- [ ] `planner.py`: full context → finite list of steps (runs on `BIG`, falls back to `SMALL`)
-- [ ] `synthesizer.py`: full context + step results → answer (runs on `BIG`)
-- [ ] Worker steps run on `SMALL`; only planner/synthesizer use the `BIG` reasoning tier
+- [ ] `planner.py`: full context → finite list of steps on the chat model
+- [ ] `synthesizer.py`: full context + step results → answer on the chat model
+- [ ] Worker steps use isolated context; planner/synthesizer use full context. All roles
+  share one model endpoint and may use distinct call profiles
 - [ ] Verify: at most one capped re-plan on failure (never a loop)
 
 ### 5.2 Tool registry
@@ -319,7 +326,12 @@ solid. **Not** ReAct — finite plan, no open loop.
 Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): desktop script vs Docker Compose.
 - [x] Pin a tested llama.cpp build (version + sha256 in `configs/binaries.yaml`) — binary + cudart DLL set, both FLAT zips extracted into one `binaries/<folder>/` so `llama-server.exe` sits next to `ggml-cuda.dll` and the cudart libs; downloader/exe-resolution logic verified against the real archive layout
 - [ ] Host the pinned zips as GitHub Release assets in this repo; first-run downloads from there, not upstream — reproducible install, fixed benchmark runtime, no upstream drift
-- [x] Desktop (household): `run-desktop.py` / PyInstaller spec (`api/`, `scripts/`, `shared/`, `dist/`, `configs/`); first-run downloads the pinned binaries + Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B → generates and persists local secrets → starts llama-server(s) + uvicorn (serving the built frontend) → opens browser; SQLite + sqlite-vec by default; test on a clean Windows machine without Python
+- [x] Desktop source launcher: `run-desktop.py` downloads the pinned binaries +
+  Qwen3.5-9B (~5.5GB) + Qwen3-Embedding-0.6B, then starts llama-server(s) + uvicorn
+  serving the built frontend; SQLite + sqlite-vec by default
+- [ ] Desktop packaged app: add the PyInstaller spec and bundle
+  (`api/`, `scripts/`, `shared/`, `dist/`, `configs/`); generate and persist secrets on
+  first run; open the browser; verify on a clean Windows machine without Python
 - [x] Team server (Docker Compose): `docker compose up` — `db` (pgvector image) + `clyre` (FastAPI monolith serving the built Vue frontend); llama/embedding services with HF model auto-download and `/health` healthchecks; the API waits for db+llama+embedding to be healthy
 - [ ] Docker: llama-server runs natively on the host for direct GPU (container reaches it via `host.docker.internal`) or as a compose service where nvidia-container-toolkit is configured — verify the GPU-reservation path on a real host
 - [ ] Persist uploaded files in the team Docker deployment: mount `FILES_DIR` to a named volume or host path, and document backup/restore together with the database

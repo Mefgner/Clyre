@@ -1,5 +1,10 @@
 # 9B parameter floor for the local model
 
+- **Status:** accepted
+- **Opened:** 2026-08-17
+- **Accepted:** 2026-09-08
+- **Owner:** project owner
+
 ## Context
 
 The app must follow structured output reliably (plans, tool calls, constrained decoding).
@@ -7,8 +12,10 @@ Empirically, smaller models fail at this.
 
 ## Decision
 
-Hard floor of 9B params (Qwen3.x-9B, Q4_K_M). 4GB/6GB inference profiles are dropped as
-unsupported.
+Hard floor of 9B params (Qwen3.x-9B, Q4_K_M) for production chat and structured-output
+evaluation. The smaller `role:test` model is an explicit test-infrastructure exception,
+not a supported production configuration. 4GB/6GB production inference profiles are
+dropped as unsupported.
 
 ## Alternatives considered
 

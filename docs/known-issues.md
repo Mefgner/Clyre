@@ -222,10 +222,12 @@ The `offset` replay of `GenerationRun.subscribe` is therefore only reachable at
 the service level today (covered by `tests_e2e/test_generation_pubsub.py`). A
 dedicated attach/re-subscribe endpoint is needed for true reconnect semantics.
 
-### 25. PLAN §6.3 claims undelivered work — `PLAN.md:320`
+### 25. [x] PLAN §6.3 claims undelivered work — `PLAN.md:320`
 Checked desktop-packaging item describes a PyInstaller spec, generated and
 persisted secrets, browser opening, and a clean-Windows test — none exist
 (contradicts M11, unchecked). Rescope the box to what shipped.
+_Closed by splitting the completed source launcher from the still-unchecked packaged-app
+work; M11 remains the clean-machine capability gate._
 
 ### 26. Env template incomplete; empty secrets accepted — `configs/base.env.example`,
 `shared/pyutils/env.py`

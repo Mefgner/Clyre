@@ -14,8 +14,8 @@ Locally-hosted, LLM-powered web app for small teams and households (bachelor the
 - Backend: Python 3.11+, FastAPI, SQLAlchemy (async), Pydantic v2; Alembic migrations
 - Frontend: Vue 3, Vuetify 3, Pinia, TypeScript
 - Inference: llama.cpp (`llama-server`) behind the OpenAI-compatible layer only — never vendor SDKs
-- DB: SQLite + sqlite-vec WAL (desktop default); PostgreSQL 16 + pgvector for teams; selected by `DB_ENGINE`/`DATABASE_URL`
-- Models: default chat Qwen3.5-9B (Q4_K_M), hard floor 9B params; embedding Qwen3-Embedding-0.6B, `VECTOR_DIM = 1024`. Three tiers via env — `SMALL_*` (chat + worker steps), `BIG_*` (planner + synthesizer; falls back to SMALL — one configured tier takes all load), `EMBEDDING_*`. One client class, configured per tier. BIG must stay local (sees full user context).
+- DB: SQLite + sqlite-vec WAL (desktop default); PostgreSQL 16 + pgvector for teams. `DB_ENGINE`/`DATABASE_URL` construct the SQLAlchemy engine; the vector repository is selected from the live engine dialect.
+- Models: one chat model, Qwen3.5-9B (Q4_K_M), performs every cognitive role; the production floor is 9B params. Qwen3-Embedding-0.6B provides embeddings with `VECTOR_DIM = 1024`. Configure the two endpoints with `CHAT_*` and `EMBEDDING_*`. Roles such as router, parser, planner, and synthesizer are call profiles on the chat model, not separate model tiers.
 
 ## Layout
 Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py` (logic) → `crud/<domain>.py` (queries) → `schemas/<domain>.py` (DTOs) → `models/<domain>.py` (ORM).
@@ -26,7 +26,7 @@ Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py
 
 ## Response pipeline
 `POST /api/chat/stream` today; `mode: auto|fast|plan` request field is planned
-- **FAST (router):** every message → one constrained SMALL-tier classification (recent history + registry names) → plain chat or a registered capability pipeline (`parse → execute → synthesize`). The model never sees raw tools. Streams **NDJSON**.
+- **FAST (router):** every message → one constrained chat-model classification (recent history + registry names) → plain chat or a registered capability pipeline (`parse → execute → synthesize`). The model never sees raw tools. Streams **NDJSON**.
 - **PLAN** *(deferred, post-thesis)*: planner → sequential tool steps → synthesizer. Checkpointed at approval/completion. Progress via **SSE**.
 
 Design details: `docs/plans/tool-contract.md`, rationale: ADR-draft 11 (`docs/adr/drafts/11-deterministic-routing.md`).
@@ -36,13 +36,14 @@ Design details: `docs/plans/tool-contract.md`, rationale: ADR-draft 11 (`docs/ad
 - Injected context goes at a stable position, never mid-history.
 
 ## Orchestrator
-Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` refs; linear plans; verify failure → at most one capped re-plan. Write tools require approval (human-in-the-loop). Worker steps = isolated context on `SMALL`; planner/synthesizer = full context on `BIG`.
+Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` refs; linear plans; verify failure → at most one capped re-plan. Write tools require approval (human-in-the-loop). Worker steps use isolated context; planner/synthesizer use full context. All roles share the chat model.
 
 ## Conventions
 - Logic in services, queries in crud, `commit()` in services only. `get_db_session` from `api/db.py`.
 - Auth: `Bearer` access token + refresh token as httponly cookie.
 - NDJSON (chat) vs SSE (orchestrator) — don't conflate.
 - Black (line length 96) + Ruff.
+- ADR publication: keep working notes, source material, and unapproved alternatives in `docs/adr/local/`; it is intentionally local and ignored by Git. Publish a record under `docs/adr/drafts/` only after explicit owner approval, with a self-contained rationale, alternatives, and consequences; do not include private working material. Start publishable records from `docs/adr/template.md`. Local implementation tasks belong in `PLAN.md`/`PLAN-NOTE`; confirmed defects belong in `docs/known-issues.md`.
 - In-code plan notes (executable backlog): when working on a plan or build and you find an inconsistency, bug, or missing piece that does not belong in `PLAN*.md`, record it in the code instead of losing it:
   - Problem/required fix at an existing entity → a one-line comment directly above it: `# PLAN-NOTE(<plan-id>): <short description>`.
   - Needed function/class that does not exist yet → declare it with a full signature, no logic: body = docstring (arbitrary length; may describe intent, neighbors, and callers) + `raise NotImplementedError`. Mark the declaration line with `# STUB(<plan-id>)`.
@@ -56,7 +57,7 @@ Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` re
 - Pre-commit: backend + frontend hooks (eslint `--fix`, vue-tsc, ruff/black/pyright/pytest unit-only); needs Node/npm with `npm install` once. For large or cross-cutting commits always run the full sweep first: `poetry run pre-commit run --all-files`.
 - Migrations: run by launchers before the API starts — `run-desktop.py` and the Dockerfile CMD (`python -m db_migrations`); CLI: `poetry run alembic upgrade head`, new revision: `poetry run alembic revision --autogenerate -m "<msg>"`, verify: `poetry run alembic check`
 - Env: copy `configs/base.env.example` → `.env`
-- Deployment: runtime-agnostic monolith — desktop script (`run-desktop.py`, SQLite default) or `docker compose up` (PostgreSQL + pgvector); `DB_ENGINE`/`DATABASE_URL` select the backend.
+- Deployment: runtime-agnostic monolith — desktop script (`run-desktop.py`, SQLite default) or `docker compose up` (PostgreSQL + pgvector); `DB_ENGINE`/`DATABASE_URL` configure the database engine, and dialect-specific behavior follows the live engine.
 
 ## Known issues
 `docs/known-issues.md` lists reviewed weaknesses outside the planned-rework scope, including the affected-file list. If you edit any file mentioned there, read that document first and account for the noted problem: fix it if it falls within your change's scope, or at minimum avoid regressing it.

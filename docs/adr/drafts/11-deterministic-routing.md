@@ -1,5 +1,10 @@
 # Deterministic routing over model-facing tools
 
+- **Status:** accepted
+- **Opened:** 2026-08-21
+- **Accepted:** 2026-09-08
+- **Owner:** project owner
+
 ## Context
 
 The original L1 design let the model emit one inline read-only tool call in the fast path.
@@ -12,7 +17,7 @@ a command syntax was also rejected — the interaction must stay plain conversat
 
 ## Decision
 
-Fast mode **is** the router. Every user message is classified by one constrained SMALL-tier
+Fast mode **is** the router. Every user message is classified by one constrained chat-model
 call (recent history + registry names) into plain chat or one registered capability; a
 capability is a plugin with a fixed `parse → execute → synthesize` topology that always
 returns a finished answer. The model never sees raw tools; selection and topology live
@@ -45,6 +50,7 @@ state waits for checkpoint infrastructure.
 ## Thesis link
 
 Core empirical claim — determinism beats agentic flexibility on constrained hardware:
-router misroute rate + token/call/latency counts feed M10 (OpenCode/DeepSeek-Harness as
-agentic baselines). Complements the retrieval ladder R1–R3 (naive vs model-written vs
-multi-query) in §6.2.
+router misroute rate + token/call/latency counts feed M10, with OpenCode as the agentic
+benchmark baseline defined by ADR-2. DeepSeek Harness/Cordis may remain related-work
+references, not additional benchmark foundations. Complements the retrieval ladder R1–R3
+(naive vs model-written vs multi-query) in §6.2.

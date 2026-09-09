@@ -1,5 +1,10 @@
 # PWA over Tauri/Electron for an app-like UI
 
+- **Status:** accepted
+- **Opened:** 2026-08-17
+- **Accepted:** 2026-09-08
+- **Owner:** project owner
+
 ## Context
 
 Want a "native app" feel without breaking the single-binary, web-app thesis framing.

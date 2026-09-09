@@ -1,5 +1,10 @@
 # Deterministic orchestration over ReAct agent loops
 
+- **Status:** accepted
+- **Opened:** 2026-08-17
+- **Accepted:** 2026-09-08
+- **Owner:** project owner
+
 ## Context
 
 Clyre targets local LLMs (9B floor) on consumer hardware. Small models struggle to

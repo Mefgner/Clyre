@@ -1,5 +1,10 @@
 # Runtime-agnostic monolith with hybrid delivery (Docker + desktop script)
 
+- **Status:** accepted
+- **Opened:** 2026-08-17
+- **Accepted:** 2026-09-08
+- **Owner:** project owner
+
 ## Context
 
 Two deployment targets with conflicting needs: households want a zero-friction
@@ -10,7 +15,7 @@ script-only answer forced teams to hand-install PostgreSQL, which is worse than 
 ## Decision
 
 Keep the app a runtime-agnostic monolith configured entirely by env (`DATABASE_URL`,
-`SMALL_*` / `BIG_*` / `EMBEDDING_*` model URLs). SQLAlchemy + Alembic are backend-agnostic; the
+`CHAT_*` / `EMBEDDING_*` model URLs). SQLAlchemy + Alembic are backend-agnostic; the
 only DB-specific code lives behind `VectorRepository` (pgvector vs sqlite-vec). Then ship
 two thin delivery shapes over the same code:
 

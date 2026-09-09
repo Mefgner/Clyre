@@ -1,5 +1,10 @@
 # Vendored, pinned llama.cpp binary over upstream latest
 
+- **Status:** accepted
+- **Opened:** 2026-08-17
+- **Accepted:** 2026-09-08
+- **Owner:** project owner
+
 ## Context
 
 First-run must be reproducible on a clean machine, and the benchmark runtime must be fixed.

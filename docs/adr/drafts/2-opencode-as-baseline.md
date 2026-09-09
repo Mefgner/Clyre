@@ -1,5 +1,10 @@
 # OpenCode as benchmark baseline, not foundation
 
+- **Status:** accepted
+- **Opened:** 2026-08-17
+- **Accepted:** 2026-09-08
+- **Owner:** project owner
+
 ## Context
 
 OpenCode is a mature agentic harness. The question was whether to build Clyre on top of

@@ -1,9 +1,14 @@
 # Initial project state
 
+- **Status:** historical
+- **Opened:** 2026-06-02
+- **Last updated:** 2026-09-08
+- **Owner:** project owner
+
 This record is a snapshot of where Clyre stands at the start of the architectural
 work the following ADRs describe. It is not a decision — it is the baseline every
-later ADR builds on or changes. Full target architecture lives in `CLAUDE.md`;
-the roadmap in `PLAN.md`.
+later ADR builds on or changes. At the time, orientation lived in `CLAUDE.md`; the
+current project orientation is `AGENTS.md` and the roadmap is `PLAN.md`.
 
 ## Identity
 

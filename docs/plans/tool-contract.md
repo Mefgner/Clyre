@@ -21,7 +21,7 @@ exactly what weak local models (9B floor) do reliably.
 
 ## Decision (one paragraph)
 
-Fast mode **is** the router: every user message is classified (one constrained SMALL-tier
+Fast mode **is** the router: every user message is classified (one constrained chat-model
 call) into plain chat or one registered capability. A capability = a plugin whose handler
 composes raw tools via engine primitives through a fixed skeleton (`parse` → `execute` →
 `synthesize`) and always returns a finished answer. The topology of stages is chosen by the
@@ -87,7 +87,7 @@ class ThickTool(ABC):
     manifest: ToolManifest
 
     async def run(self, ctx: ToolContext, query: str) -> ToolResult:
-        params   = await self.parse(ctx, query)          # constrained JSON, SMALL tier
+        params   = await self.parse(ctx, query)          # constrained JSON, chat model
         material = await self.execute(ctx, params)       # deterministic; may call engine
         material = ctx.fit_to_budget(material)
         return await self.synthesize(ctx, query, material)   # always; answer ownership
@@ -103,7 +103,7 @@ Rules baked into the skeleton:
    `parsed_params` as merge base) → strict JSON via constrained decoding. Missing entities
    → deterministic template listing what is needed; the next user turn re-enters as a fresh
    query. No stateful clarification loops (see Future Work).
-2. **LLM touches only the edges** (`parse`, `synthesize`, both SMALL). Everything between
+2. **LLM touches only the edges** (`parse`, `synthesize`, same chat model). Everything between
    is deterministic code.
 3. **No LLM compaction inside `execute`.** Unknown-size outputs are handled by boundary
    normalization + selection (see Ranking), never by generation cascades.
@@ -179,7 +179,7 @@ Three levels were considered; L1 is chosen.
 ```
 input:  recent messages + user query + [{name, description, produces}] from registry
 output: constrained enum: "chat" | "<plugin name>"
-tier:   SMALL; runs on every message
+model:  CHAT; runs on every message
 ```
 
 - **Always LLM classification** — no slash commands, no syntax, no cheap prefilter: users
@@ -231,19 +231,19 @@ mechanism here.
 
 ## Future work (deferred, post-thesis)
 
-- **Plan-and-execute (M8/M9)** — planner on BIG builds finite step lists; approval gates
+- **Plan-and-execute (M8/M9)** — planner builds finite step lists on the chat model; approval gates
   enforce `access: W`. The contract above is designed so this slots in without rework:
   manifests, snapshots, and `$stepN`-style refs carry over.
-- **Planner chaining** — BIG links pipeline outputs to inputs using `answer` text as the
+- **Planner chaining** — the planner links pipeline outputs to inputs using `answer` text as the
   universal interface (`produces` guides wiring).
 - **Hot-plug, two levels**: (1) lifecycle events (`plugin_mounted`/`unmounted`) invalidate
-  the router's registry view — install capabilities without restart; (2) BIG composes
+  the router's registry view — install capabilities without restart; (2) the planner composes
   pipelines from registered manifests. Inspired by DeepSeek Harness/Cordis; cited as related
   work, not imported — "everything is a plugin" contradicts ADR-1.
 - **Clarify-with-state** — suspend/resume clarification dialogs land together with the
   checkpoint infrastructure they require.
-- **BIG tier** — configuration stays in env/code; processes are not launched until this
-  phase finds it a use (or it is removed quickly).
+- **Separate reasoning model** — rejected by ADR-12 for the edge baseline. Planner and
+  synthesizer use the same chat endpoint with role-specific call profiles.
 
 ## Open questions
 
@@ -266,5 +266,5 @@ mechanism here.
 - New **2.6** (fast-mode routing) references this document; old inline-tool-call items
   removed; background generation added as **2.7**.
 - **M5** reworded to the router model; **M8/M9** marked deferred.
-- Phase 5 header notes deferral; BIG-tier note added.
+- Phase 5 header notes deferral and the single-chat-model decision.
 - §6.2 gains the R1–R3 experiment.

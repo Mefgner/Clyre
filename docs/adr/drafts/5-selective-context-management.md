@@ -1,5 +1,10 @@
 # Selective context management over passive global RAG
 
+- **Status:** accepted
+- **Opened:** 2026-08-17
+- **Accepted:** 2026-09-08
+- **Owner:** project owner
+
 ## Context
 
 The thesis requires RAG, but for the product RAG is arguably optional — a household has no
