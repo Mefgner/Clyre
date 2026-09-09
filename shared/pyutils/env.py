@@ -1,5 +1,5 @@
 import logging
-from typing import TYPE_CHECKING, Any, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -43,22 +43,17 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_DUR_MINUTES: int = 15
     REFRESH_TOKEN_DUR_DAYS: int = 15
 
-    # Inference tiers. env holds only overrides: the base URL (where the tier is
-    # served) and the model name/alias to send in requests. When unset, values are
-    # resolved from the model catalog (configs/models.yaml) and the local bind
-    # addresses below. BIG_* may be left empty -> it falls back to SMALL_*.
-    SMALL_BASE_URL: str | None = None  # chat + worker steps
-    SMALL_MODEL: str | None = None
-    BIG_BASE_URL: str | None = None  # planner + synthesizer (optional)
-    BIG_MODEL: str | None = None
+    # Model endpoints. env holds only overrides: the base URL where the model is
+    # served and the model name/alias sent in requests. All cognitive roles share
+    # the chat endpoint; role-specific behavior belongs in call profiles.
+    CHAT_BASE_URL: str | None = None
+    CHAT_MODEL: str | None = None
     EMBEDDING_BASE_URL: str | None = None  # RAG; required
     EMBEDDING_MODEL: str | None = None
 
     # Local llama-server bind addresses (desktop launcher)
-    SMALL_BIND_HOST: str = "localhost"
-    SMALL_BIND_PORT: int = 6760
-    BIG_BIND_HOST: str = "localhost"
-    BIG_BIND_PORT: int = 6762
+    CHAT_BIND_HOST: str = "localhost"
+    CHAT_BIND_PORT: int = 6760
     EMBEDDING_BIND_HOST: str = "localhost"
     EMBEDDING_BIND_PORT: int = 6761
 

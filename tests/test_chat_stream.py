@@ -99,7 +99,7 @@ async def user_id(tables) -> str:
 @pytest_asyncio.fixture
 async def client(user_id, monkeypatch):
     fake = FakePipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: fake)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: fake)
 
     async def _auth() -> TokenPayload:
         return TokenPayload(
@@ -190,7 +190,7 @@ async def test_stream_existing_thread_sends_history_and_appends(client):
 
 async def test_thinking_stream_events_and_persistence(user_id, monkeypatch, tables):
     fake = FakePipeline(THINKING_CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: fake)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: fake)
 
     async def _auth() -> TokenPayload:
         return TokenPayload(
@@ -245,7 +245,7 @@ async def test_thinking_stream_events_and_persistence(user_id, monkeypatch, tabl
 
 async def test_history_excludes_thinking_from_llm_payload(user_id, monkeypatch, tables):
     fake = FakePipeline(THINKING_CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: fake)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: fake)
 
     async def _auth() -> TokenPayload:
         return TokenPayload(
@@ -381,7 +381,7 @@ async def test_failed_generation_marks_journal_and_drops_empty_message(
     user_id, monkeypatch, tables
 ):
     fake = ExplodingPipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: fake)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: fake)
 
     async def _auth() -> TokenPayload:
         return TokenPayload(
@@ -433,7 +433,7 @@ async def test_sweep_marks_running_rows_interrupted(user_id, tables):
 
 async def test_thread_metadata_exposes_is_generating(user_id, tables, monkeypatch):
     slow = SlowPipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: slow)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: slow)
 
     async with db.get_session_manager().async_session_maker() as session:
         thread = Thread(id=uuid.uuid4().hex, user_id=user_id, title="t")
@@ -496,7 +496,7 @@ async def test_system_prompt_injected_once_at_stable_position(client):
 
 async def test_second_send_while_running_returns_409(client, user_id, monkeypatch):
     slow = SlowPipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: slow)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: slow)
     http, _ = client
 
     thread_id = await _create_thread(user_id)
@@ -513,7 +513,7 @@ async def test_second_send_while_running_returns_409(client, user_id, monkeypatc
 
 async def test_stop_persists_partial_and_closes_stream(client, user_id, monkeypatch):
     slow = SlowPipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: slow)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: slow)
     http, _ = client
 
     thread_id = await _create_thread(user_id)
@@ -644,7 +644,7 @@ async def test_finalize_failure_does_not_wedge_run(user_id, monkeypatch, tables)
     """A DB failure at the terminal flush must not hang subscribers or leave
     the run RUNNING in the registry (thread 409-locked until restart)."""
     fake = FakePipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: fake)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: fake)
 
     async def _boom(session, message, content, thinking):
         raise RuntimeError("db down at terminal flush")
@@ -698,7 +698,7 @@ async def test_foreign_active_thread_maps_to_not_found(user_id, monkeypatch, tab
     """Ownership is checked before activity: a foreign thread id must yield
     'not found' (404), never a 409 that leaks generation state."""
     slow = SlowPipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: slow)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: slow)
 
     async with db.get_session_manager().async_session_maker() as session:
         stranger = User()
@@ -732,7 +732,7 @@ async def test_concurrent_starts_produce_single_winner(user_id, monkeypatch, tab
                 yield chunk
 
     fake = GatedPipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: fake)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: fake)
 
     original_ensure = chatting_module.ChattingService._ensure_no_active
 
@@ -770,7 +770,7 @@ async def test_delete_thread_stops_active_generation(user_id, monkeypatch, table
     """Deleting a generating thread must stop its run — the background task
     otherwise flushes into rows the cascade delete removed."""
     slow = SlowPipeline(CHUNKS)
-    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda tier: slow)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: slow)
 
     thread_id = await _create_thread(user_id)
     run = await _start_slow_generation(user_id, thread_id)

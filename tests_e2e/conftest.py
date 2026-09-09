@@ -18,12 +18,10 @@ os.environ.setdefault(
         "postgresql+asyncpg://clyre_e2e:clyre_e2e@localhost:55432/clyre_e2e",
     ),
 )
-os.environ.setdefault(
-    "SMALL_BASE_URL", os.getenv("CLYRE_E2E_CHAT_URL", "http://localhost:6760")
-)
+os.environ.setdefault("CHAT_BASE_URL", os.getenv("CLYRE_E2E_CHAT_URL", "http://localhost:6760"))
 # 4B deliberately sits below the project's 9B chat floor: e2e needs a model
 # that fits the 4GB VRAM of the test GPU alongside acceptable run times.
-os.environ.setdefault("SMALL_MODEL", "Qwen3.5-4B")
+os.environ.setdefault("CHAT_MODEL", "Qwen3.5-4B")
 os.environ.setdefault(
     "EMBEDDING_BASE_URL", os.getenv("CLYRE_E2E_EMBEDDING_URL", "http://localhost:6761")
 )

@@ -11,7 +11,7 @@ from crud.vector import VectorRepository, get_vector_repository
 from models import ChunkVector, FileMetadata
 from pipelines.embed import get_embedding_pipeline
 from pipelines.fs import get_file_store
-from pipelines.inference import Tier, get_inference_pipeline
+from pipelines.inference import get_inference_pipeline
 from pipelines.ingest import chunk_text, extract_text
 from schemas.file import ChunkEmbedding
 from services.embedding_space import ensure_for_write
@@ -74,7 +74,7 @@ async def ingest_file(
     embedder = embedder or get_embedding_pipeline()
     repository = repository or get_vector_repository()
     file_store = file_store or get_file_store()
-    token_counter = token_counter or get_inference_pipeline(Tier.SMALL).count_tokens_many
+    token_counter = token_counter or get_inference_pipeline().count_tokens_many
 
     try:
         file.index_status = "pending"

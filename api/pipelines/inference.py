@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, AsyncGenerator, Literal
 
 import httpx
@@ -12,7 +11,7 @@ from utils import env
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.INFO)
 
-DEFAULT_SMALL_MODEL = "Qwen3.5-9B"
+DEFAULT_CHAT_MODEL = "Qwen3.5-9B"
 STARTUP_RETRIES = 60
 STARTUP_RETRY_DELAY = 5.0
 TOKENIZE_CONCURRENCY = 8
@@ -51,13 +50,8 @@ def _thinking_payload_fields(model_name: str, enable_thinking: bool) -> dict[str
     return {}
 
 
-class Tier(str, Enum):
-    SMALL = "small"
-    BIG = "big"
-
-
 class LLMPipeline:
-    """OpenAI-compatible chat client for one model tier."""
+    """OpenAI-compatible client for Clyre's single chat model."""
 
     def __init__(
         self,
@@ -222,52 +216,39 @@ class LLMPipeline:
         return await asyncio.gather(*(self._count_tokens(text) for text in texts))
 
 
-def _resolve_chat_tier(role: Tier) -> tuple[str, str]:
-    small = (env.SMALL_BASE_URL, env.SMALL_MODEL)
-    big = (env.BIG_BASE_URL, env.BIG_MODEL)
-
-    if all(value is None for value in (*small, *big)):
+def _resolve_chat_model() -> tuple[str, str]:
+    if env.CHAT_BASE_URL is None and env.CHAT_MODEL is None:
         raise RuntimeError(
-            "No chat model tier configured: set SMALL_* and/or BIG_* "
-            "(base URL or model) in the environment."
+            "No chat model configured: set CHAT_BASE_URL and/or CHAT_MODEL "
+            "in the environment."
         )
 
-    url, model = small if role is Tier.SMALL else big
-    if url is None and model is None:
-        url, model = big if role is Tier.SMALL else small
-
-    if url is None:
-        host, port = (
-            (env.SMALL_BIND_HOST, env.SMALL_BIND_PORT)
-            if role is Tier.SMALL
-            else (env.BIG_BIND_HOST, env.BIG_BIND_PORT)
-        )
-        url = f"http://{host}:{port}"
-
-    if model is None:
-        model = DEFAULT_SMALL_MODEL
+    url = env.CHAT_BASE_URL or f"http://{env.CHAT_BIND_HOST}:{env.CHAT_BIND_PORT}"
+    model = env.CHAT_MODEL or DEFAULT_CHAT_MODEL
 
     return url, model
 
 
-_instances: dict[Tier, LLMPipeline] = {}
+_instance: LLMPipeline | None = None
 
 
-def get_inference_pipeline(role: Tier) -> LLMPipeline:
-    if role not in _instances:
-        base_url, model = _resolve_chat_tier(role)
-        _instances[role] = LLMPipeline(base_url, model)
-    return _instances[role]
+def get_inference_pipeline() -> LLMPipeline:
+    global _instance
+    if _instance is None:
+        base_url, model = _resolve_chat_model()
+        _instance = LLMPipeline(base_url, model)
+    return _instance
 
 
 async def close_inference_pipelines() -> None:
-    await asyncio.gather(*(pipeline.aclose() for pipeline in _instances.values()))
-    _instances.clear()
+    global _instance
+    if _instance is not None:
+        await _instance.aclose()
+        _instance = None
 
 
 __all__ = [
     "LLMPipeline",
-    "Tier",
     "close_inference_pipelines",
     "get_inference_pipeline",
 ]

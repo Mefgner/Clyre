@@ -74,37 +74,20 @@ def _model_name_by_role(models: list[dict[str, str]], role: str) -> str:
     raise ValueError(f"No model with role '{role}' found in models.yaml")
 
 
-def _model_name_by_role_or_none(
-    models: list[dict[str, str]], role: str
-) -> str | None:
-    try:
-        return _model_name_by_role(models, role)
-    except ValueError:
-        return None
-
-
 def _select_model_items(
     models: list[dict[str, str]], settings: Settings
 ) -> list[dict[str, str]]:
     """Select exactly the catalog entries used by the current desktop mode.
 
-    Normal mode resolves SMALL + EMBEDDING (+ optional BIG). TEST_MODE swaps the
-    default SMALL role for TEST and disables the default BIG tier. Explicit
-    *_MODEL overrides remain authoritative and replace, rather than supplement,
-    their role defaults.
+    Normal mode resolves CHAT + EMBEDDING. TEST_MODE swaps the default CHAT role
+    for TEST. Explicit *_MODEL overrides remain authoritative and replace, rather
+    than supplement, their role defaults.
     """
-    small_role = "test" if settings.TEST_MODE else "small"
+    chat_role = "test" if settings.TEST_MODE else "chat"
     selected_names = {
-        settings.SMALL_MODEL or _model_name_by_role(models, small_role),
+        settings.CHAT_MODEL or _model_name_by_role(models, chat_role),
         settings.EMBEDDING_MODEL or _model_name_by_role(models, "embedding"),
     }
-
-    if settings.BIG_MODEL:
-        selected_names.add(settings.BIG_MODEL)
-    elif not settings.TEST_MODE:
-        default_big = _model_name_by_role_or_none(models, "big")
-        if default_big:
-            selected_names.add(default_big)
 
     return [model for model in models if model.get("name") in selected_names]
 

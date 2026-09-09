@@ -73,20 +73,12 @@ def resolve_model_path(model_name: str) -> str:
 @lru_cache(maxsize=16)
 def get_default_model_name_by_role(role: str) -> str:
     """Return the `name` of the first catalog entry tagged with the given role
-    (small | big | embedding)."""
+    (chat | test | embedding)."""
     models = dict_from_yaml(get_app_root_dir() / "configs" / "models.yaml")
     for m in models:
         if m.get("role") == role:
             return m.get("name")
     raise ValueError(f"No model with role '{role}' found in models.yaml")
-
-
-@lru_cache(maxsize=16)
-def get_default_model_name_by_role_or_none(role: str) -> str | None:
-    try:
-        return get_default_model_name_by_role(role)
-    except ValueError:
-        return None
 
 
 __all__ = [
@@ -95,5 +87,4 @@ __all__ = [
     "get_default_llama_executable",
     "resolve_model_path",
     "get_default_model_name_by_role",
-    "get_default_model_name_by_role_or_none",
 ]

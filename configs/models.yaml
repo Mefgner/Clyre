@@ -1,8 +1,8 @@
-# SMALL — chat + worker steps. Default desktop model outside TEST_MODE.
+# CHAT — every cognitive role. Default desktop model outside TEST_MODE.
 # Qwen3.5-9B (Q4_K_M).
 - filename: "Qwen3.5-9B-Q4_K_M.gguf"
   name: "Qwen3.5-9B"
-  role: small
+  role: chat
   url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf"
   sha256: "sha256:03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
   dest_subdir: models/
@@ -16,19 +16,8 @@
   sha256: "sha256:603197d349cbf1d284d8277f5e8326b8b0500d4522908e9d0d46185f06e82551"
   dest_subdir: models/
 
-# BIG — planner + synthesizer. OPTIONAL. Uncomment and fill url/sha256 to
-# download and use a larger reasoning model; a local server starts on the BIG
-# bind port and BIG_* env overrides the route. Leave commented -> BIG falls
-# back to SMALL.
-# - filename: "Qwen3.5-32B-Instruct-Q4_K_M.gguf"
-#   name: "Qwen3.5-32B"
-#   role: big
-#   url: ""
-#   sha256: ""
-#   dest_subdir: models/
-
 # TEST — lightweight chat model selected when TEST_MODE=true. The desktop
-# downloader skips the production SMALL/BIG defaults in that mode.
+# downloader substitutes it for the production CHAT model in that mode.
 - filename: "Qwen3.5-4B-UD-Q3_K_XL.gguf"
   name: "Qwen3.5-4B"
   role: test

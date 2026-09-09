@@ -21,7 +21,7 @@ from crud.message import (
 )
 from db import get_session_manager
 from models import GenerationRunRow, Message, Thread
-from pipelines.inference import Tier, get_inference_pipeline
+from pipelines.inference import get_inference_pipeline
 from schemas.chatting import StreamingBlock
 from services.generation import (
     PARTIAL_FLUSH_SECONDS,
@@ -59,7 +59,7 @@ class ChattingService:
     # (e.g. a title-generation step in the pipeline layer), not kept here.
     @staticmethod
     async def generate_thread_title(message: str) -> str:
-        llama = get_inference_pipeline(Tier.SMALL)
+        llama = get_inference_pipeline()
         llama_prompt = f"Create a concise and descriptive title for the given message (min. 4 words and up to 6 words (strict), use language of context given below):\n\n{message}\n\nTitle:"
         response_data = await llama.chat_completion_sync(
             [{"role": "user", "content": llama_prompt}],
@@ -134,7 +134,7 @@ class ChattingService:
     async def generate_llm_response(
         self, session: AsyncSession, thread_id: str, user_id: str
     ) -> tuple[Message, str]:
-        llama = get_inference_pipeline(Tier.SMALL)
+        llama = get_inference_pipeline()
         messages = await get_messages_in_thread(session, thread_id, user_id)
         if not messages:
             raise ValueError("Message not found")
@@ -276,7 +276,7 @@ class ChattingService:
         # Fresh query on purpose: a retried run must not see a just-deleted
         # partial answer lingering in the identity map's relationship cache.
         history = self.build_history(await get_messages_in_thread(session, thread_id, user_id))
-        llama = get_inference_pipeline(Tier.SMALL)
+        llama = get_inference_pipeline()
 
         if forced_order is not None:
             order = forced_order

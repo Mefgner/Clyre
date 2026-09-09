@@ -85,7 +85,5 @@ async def _sweep_interrupted_generations():
 
 
 app.add_event_handler("startup", _sweep_interrupted_generations)
-app.add_event_handler(
-    "startup", inference.get_inference_pipeline(inference.Tier.SMALL).wait_for_startup
-)
+app.add_event_handler("startup", inference.get_inference_pipeline().wait_for_startup)
 app.add_event_handler("startup", embed.get_embedding_pipeline().wait_for_startup)

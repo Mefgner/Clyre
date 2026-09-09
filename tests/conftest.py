@@ -12,8 +12,8 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/clyre_test.sql
 # The app-level session manager resolves the URL against cwd; make sure the
 # directory exists before any test opens it.
 os.makedirs("data", exist_ok=True)
-os.environ.setdefault("SMALL_BASE_URL", "http://localhost:6760")
-os.environ.setdefault("SMALL_MODEL", "Qwen3.5-9B")
+os.environ.setdefault("CHAT_BASE_URL", "http://localhost:6760")
+os.environ.setdefault("CHAT_MODEL", "Qwen3.5-9B")
 os.environ.setdefault("EMBEDDING_BASE_URL", "http://localhost:6761")
 os.environ.setdefault("EMBEDDING_MODEL", "Qwen3-Embedding-0.6B")
 

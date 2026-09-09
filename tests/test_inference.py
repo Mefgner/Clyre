@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from pipelines import inference
-from pipelines.inference import LLMPipeline, Tier, _resolve_chat_tier
+from pipelines.inference import LLMPipeline, _resolve_chat_model
 
 
 async def test_count_tokens_many_uses_tokenize_endpoint():
@@ -21,54 +21,35 @@ async def test_count_tokens_many_uses_tokenize_endpoint():
     assert [request.url.path for request in requests] == ["/tokenize", "/tokenize"]
 
 
-def _set_tiers(monkeypatch, **kwargs):
+def _set_chat_config(monkeypatch, **kwargs):
     for key in (
-        "SMALL_BASE_URL",
-        "SMALL_MODEL",
-        "BIG_BASE_URL",
-        "BIG_MODEL",
-        "SMALL_BIND_HOST",
-        "SMALL_BIND_PORT",
-        "BIG_BIND_HOST",
-        "BIG_BIND_PORT",
+        "CHAT_BASE_URL",
+        "CHAT_MODEL",
+        "CHAT_BIND_HOST",
+        "CHAT_BIND_PORT",
     ):
         monkeypatch.setattr(inference.env, key, kwargs.get(key), raising=False)
 
 
-def test_resolve_big_falls_back_to_small(monkeypatch):
-    _set_tiers(
+def test_resolve_chat_uses_local_bind_when_only_model_set(monkeypatch):
+    _set_chat_config(
         monkeypatch,
-        SMALL_BASE_URL="http://small",
-        SMALL_MODEL="Small",
-        BIG_BASE_URL=None,
-        BIG_MODEL=None,
+        CHAT_BASE_URL=None,
+        CHAT_MODEL="Chat",
+        CHAT_BIND_HOST="localhost",
+        CHAT_BIND_PORT=6760,
     )
-    assert _resolve_chat_tier(Tier.BIG) == ("http://small", "Small")
+    assert _resolve_chat_model() == ("http://localhost:6760", "Chat")
 
 
-def test_resolve_small_uses_local_bind_when_only_model_set(monkeypatch):
-    _set_tiers(
+def test_resolve_raises_when_no_chat_model_configured(monkeypatch):
+    _set_chat_config(
         monkeypatch,
-        SMALL_BASE_URL=None,
-        SMALL_MODEL="Small",
-        BIG_BASE_URL=None,
-        BIG_MODEL=None,
-        SMALL_BIND_HOST="localhost",
-        SMALL_BIND_PORT=6760,
-    )
-    assert _resolve_chat_tier(Tier.SMALL) == ("http://localhost:6760", "Small")
-
-
-def test_resolve_raises_when_no_tier_configured(monkeypatch):
-    _set_tiers(
-        monkeypatch,
-        SMALL_BASE_URL=None,
-        SMALL_MODEL=None,
-        BIG_BASE_URL=None,
-        BIG_MODEL=None,
+        CHAT_BASE_URL=None,
+        CHAT_MODEL=None,
     )
     with pytest.raises(RuntimeError):
-        _resolve_chat_tier(Tier.SMALL)
+        _resolve_chat_model()
 
 
 async def test_wait_for_startup_raises_after_retry_limit(monkeypatch):

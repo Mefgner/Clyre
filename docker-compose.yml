@@ -12,8 +12,8 @@ services:
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?}
       ACCESS_TOKEN_DUR_MINUTES: 15
       REFRESH_TOKEN_DUR_DAYS: 15
-      SMALL_BASE_URL: http://llama:6760
-      SMALL_MODEL: ${SMALL_MODEL_ALIAS:-Qwen3.5-9B}
+      CHAT_BASE_URL: http://llama:6760
+      CHAT_MODEL: ${CHAT_MODEL_ALIAS:-Qwen3.5-9B}
       EMBEDDING_BASE_URL: http://embedding:6761
     depends_on:
       db:
@@ -44,9 +44,9 @@ services:
     environment:
       LLAMA_ARG_HOST: 0.0.0.0
       LLAMA_ARG_PORT: 6760
-      LLAMA_ARG_ALIAS: ${SMALL_MODEL_ALIAS:-Qwen3.5-9B}
-      LLAMA_ARG_HF_REPO: ${SMALL_MODEL_HF:-unsloth/Qwen3.5-9B-GGUF}
-      LLAMA_ARG_HF_FILE: ${SMALL_MODEL_FILE:-Qwen3.5-9B-Q4_K_M.gguf}
+      LLAMA_ARG_ALIAS: ${CHAT_MODEL_ALIAS:-Qwen3.5-9B}
+      LLAMA_ARG_HF_REPO: ${CHAT_MODEL_HF:-unsloth/Qwen3.5-9B-GGUF}
+      LLAMA_ARG_HF_FILE: ${CHAT_MODEL_FILE:-Qwen3.5-9B-Q4_K_M.gguf}
       # Inference settings
       LLAMA_ARG_CTX_SIZE: 4096
       LLAMA_ARG_N_GPU_LAYERS: 99

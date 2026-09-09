@@ -15,7 +15,8 @@ _CHUNK_TABLE = ChunkVector.__tablename__
 class VectorRepository(Protocol):
     """Owns the embedding store, which lives outside the ORM because pgvector
     (a column type) and sqlite-vec (a virtual table) are structurally different.
-    Selected by DB_ENGINE; nothing else knows which backend is in use."""
+    Selected from the live SQLAlchemy dialect; nothing else knows which backend
+    is in use."""
 
     async def ensure_schema(self, engine: AsyncEngine) -> None: ...
 
