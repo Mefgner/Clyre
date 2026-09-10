@@ -2,7 +2,7 @@
   "name": "clyre",
   "private": true,
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.3.0-rc.2",
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
