@@ -2,9 +2,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Index from '@/pages/index.vue'
 import { useAuthStore } from '@/stores/auth.ts'
-import { useThreadStore } from '@/stores/thread.ts'
 import { useUiStore } from '@/stores/ui.ts'
-import { useUserStore } from '@/stores/user.ts'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -64,12 +62,6 @@ router.onError((err, to) => {
 
 router.isReady().then(() => {
   localStorage.removeItem('vuetify:dynamic-reload')
-
-  const authStore = useAuthStore()
-  authStore.refreshAccessToken()
-    .catch(() => {
-      useUiStore().openLogin()
-    })
 })
 
 export default router

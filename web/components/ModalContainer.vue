@@ -62,5 +62,5 @@
     }
   }
 
-  watch(() => authStore.isLoggedIn, value => value ? uiStore.closeModal() : uiStore.openLogin())
+  watch(() => authStore.isLoggedIn, value => value ? uiStore.closeModal() : uiStore.openLogin(), { immediate: true })
 </script>

@@ -12,8 +12,13 @@ export const useAuthStore = defineStore('auth', () => {
   const refreshAccessToken = async () => {
     if (!refreshPromise) {
       refreshPromise = (async () => {
-        const response = await AuthRepo.refreshToken()
-        accessToken.value = response.data.token
+        try {
+          const response = await AuthRepo.refreshToken()
+          accessToken.value = response.data.token
+        } catch (error) {
+          accessToken.value = null
+          throw error
+        }
       })().finally(() => {
         refreshPromise = null
       })
