@@ -19,7 +19,7 @@ from services.ingestion import index_file_for_project
 from services.project import create_user_project, delete_user_project
 from services.retrieval import search_project
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
 
 async def _wait_for_embedding_server(base_url: str) -> None:
@@ -36,7 +36,7 @@ async def _wait_for_embedding_server(base_url: str) -> None:
     raise AssertionError(f"embedding server did not become ready: {base_url}")
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def embedding_clients() -> AsyncIterator[tuple[EmbeddingPipeline, LLMPipeline]]:
     base_url = os.getenv("CLYRE_E2E_EMBEDDING_URL", "http://localhost:6761")
     model = os.getenv("CLYRE_E2E_EMBEDDING_MODEL", "Qwen3-Embedding-0.6B")

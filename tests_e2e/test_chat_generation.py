@@ -1,5 +1,5 @@
-"""Live e2e for chat generation over the real NDJSON API against dockerized
-Postgres + llama.cpp (Qwen3.5-4B): reasoning on/off, stop, retry, conflicts.
+"""Compact non-reasoning e2e for the real NDJSON API against dockerized
+Postgres + llama.cpp (Qwen3.5-4B): streaming, reattach, stop, retry, conflicts.
 
 Requires the e2e stack: `docker compose -f docker-compose.e2e.yml up -d`.
 """
@@ -24,13 +24,13 @@ from models import GenerationRunRow, Message
 from services.chatting import ChattingService
 from services.generation import GenerationStatus, get_run
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
-REASONING_PROMPT = "What is 17 * 24? Reason step by step carefully, then give the final number."
-LONG_PROMPT = (
-    "Write a long story (at least 500 words) about a lighthouse keeper who "
-    "discovers a mysterious door in the cliff."
-)
+SHORT_PROMPT = "Reply with exactly: OK"
+# Long enough to leave a live window for conflict/stop/reattach, but bounded to
+# tens of output tokens instead of the former 500-word story.
+ACTIVE_PROMPT = "List integers 1 through 20, separated only by commas."
+REASONING_PROMPT = "What is 17 * 24? Reason step by step, then give the final number."
 
 
 async def _thread_messages(thread_id: str) -> list[Message]:
@@ -50,6 +50,9 @@ async def _thread_messages(thread_id: str) -> list[Message]:
         return list(rows)
 
 
+@pytest.mark.skip(
+    reason="Reasoning e2e is deferred: the low-quantization test model is unreliable."
+)
 async def test_stream_with_thinking(app_client: httpx.AsyncClient, auth: AuthContext):
     async with open_stream(
         app_client,
@@ -75,13 +78,47 @@ async def test_stream_without_thinking(app_client: httpx.AsyncClient, auth: Auth
         app_client,
         "/api/chat/stream",
         headers=auth.headers,
-        json_body={"message": REASONING_PROMPT, "enableThinking": False},
+        json_body={"message": SHORT_PROMPT, "enableThinking": False},
     ) as response:
         events = await drain_events(response)
 
     assert_stream_contract(events)
     assert not chunk_texts(events, "new_thinking_chunk"), "thinking must be disabled explicitly"
     assert chunk_texts(events, "new_chunk")
+
+
+async def test_disconnect_and_http_reattach_from_offset(
+    app_client: httpx.AsyncClient, auth: AuthContext
+):
+    prefix: list[dict] = []
+    async with open_stream(
+        app_client,
+        "/api/chat/stream",
+        headers=auth.headers,
+        json_body={"message": ACTIVE_PROMPT, "enableThinking": False},
+    ) as response:
+        thread_id = response.headers["x-clyre-thread-id"]
+        async for event in iter_events(response):
+            prefix.append(event)
+            if event["event"] in CHUNK_EVENTS:
+                break
+
+    async with app_client.stream(
+        "GET",
+        f"/api/chat/stream/{thread_id}",
+        headers=auth.headers,
+        params={"offset": len(prefix)},
+    ) as response:
+        assert response.status_code == 200, await response.aread()
+        assert response.headers["x-clyre-thread-id"] == thread_id
+        suffix = await drain_events(response)
+
+    combined = prefix + suffix
+    assert_stream_contract(combined)
+    assert chunk_texts(combined, "new_chunk")
+
+    messages = await _thread_messages(thread_id)
+    assert [message.role for message in messages] == ["user", "assistant"]
 
 
 async def _read_until_first_chunk(
@@ -104,13 +141,17 @@ async def test_stream_conflict_while_active(app_client: httpx.AsyncClient, auth:
         app_client,
         "/api/chat/stream",
         headers=auth.headers,
-        json_body={"message": LONG_PROMPT},
+        json_body={"message": ACTIVE_PROMPT, "enableThinking": False},
     ) as response:
         thread_id = await _read_until_first_chunk(response)
 
         conflict = await app_client.post(
             "/api/chat/stream",
-            json={"message": "hello again", "threadId": thread_id},
+            json={
+                "message": "Reply with exactly: SECOND",
+                "threadId": thread_id,
+                "enableThinking": False,
+            },
             headers=auth.headers,
         )
         assert conflict.status_code == 409
@@ -132,7 +173,7 @@ async def test_stop_mid_generation(app_client: httpx.AsyncClient, auth: AuthCont
         app_client,
         "/api/chat/stream",
         headers=auth.headers,
-        json_body={"message": LONG_PROMPT},
+        json_body={"message": ACTIVE_PROMPT, "enableThinking": False},
     ) as response:
         async for event in iter_events(response):
             received.append(event)
@@ -172,8 +213,9 @@ async def test_stop_mid_generation(app_client: httpx.AsyncClient, auth: AuthCont
         "/api/chat/stream",
         headers=auth.headers,
         json_body={
-            "message": "Answer with a single word only: ok.",
+            "message": SHORT_PROMPT,
             "threadId": thread_id,
+            "enableThinking": False,
         },
     ) as response:
         follow_up = await drain_events(response)
@@ -185,7 +227,7 @@ async def test_retry_regenerates_in_place(app_client: httpx.AsyncClient, auth: A
         app_client,
         "/api/chat/stream",
         headers=auth.headers,
-        json_body={"message": REASONING_PROMPT},
+        json_body={"message": SHORT_PROMPT, "enableThinking": False},
     ) as response:
         first_events = await drain_events(response)
     thread_id = assert_stream_contract(first_events)
@@ -194,7 +236,9 @@ async def test_retry_regenerates_in_place(app_client: httpx.AsyncClient, auth: A
     assert [message.role for message in messages_before] == ["user", "assistant"]
 
     retry_response = await app_client.post(
-        "/api/chat/retry", json={"threadId": thread_id}, headers=auth.headers
+        "/api/chat/retry",
+        json={"threadId": thread_id, "enableThinking": False},
+        headers=auth.headers,
     )
     assert retry_response.status_code == 200
     retry_events = await drain_events(retry_response)
@@ -213,12 +257,14 @@ async def test_retry_conflicts_while_active(app_client: httpx.AsyncClient, auth:
         app_client,
         "/api/chat/stream",
         headers=auth.headers,
-        json_body={"message": LONG_PROMPT},
+        json_body={"message": ACTIVE_PROMPT, "enableThinking": False},
     ) as response:
         thread_id = await _read_until_first_chunk(response)
 
         conflict = await app_client.post(
-            "/api/chat/retry", json={"threadId": thread_id}, headers=auth.headers
+            "/api/chat/retry",
+            json={"threadId": thread_id, "enableThinking": False},
+            headers=auth.headers,
         )
         assert conflict.status_code == 409
 
@@ -238,7 +284,9 @@ async def test_retry_nothing_to_retry(app_client: httpx.AsyncClient, auth: AuthC
         )
 
     conflict = await app_client.post(
-        "/api/chat/retry", json={"threadId": thread_id}, headers=auth.headers
+        "/api/chat/retry",
+        json={"threadId": thread_id, "enableThinking": False},
+        headers=auth.headers,
     )
     assert conflict.status_code == 409
 

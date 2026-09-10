@@ -1,9 +1,9 @@
 """Live e2e for the decoupled-generation pub/sub core (`GenerationRun`) against
 the real model: multi-subscriber fan-out, unsubscribe tolerance, offset replay.
 
-These semantics are only reachable at the service level today — POST /api/chat/
-stream always starts a NEW generation and cannot re-attach to a live run (see
-docs/known-issues.md). Requires the e2e docker stack.
+The service-level fan-out remains covered here; HTTP offset reattach is covered
+through a real uvicorn socket in test_chat_generation.py. Requires the e2e
+docker stack.
 """
 
 import asyncio
@@ -16,17 +16,19 @@ import db
 from services.chatting import ChattingService
 from services.generation import GenerationRun, GenerationStatus
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
-# Enough tokens that subscribers can join/leave while the run is still live.
-PROMPT = "Count slowly from one to ten in English words."
+# Bounded output with enough tokens for subscribers to join/leave while live.
+PROMPT = "List integers 1 through 20, separated only by commas."
 
 
 async def _start_generation(auth: AuthContext) -> GenerationRun:
     service = ChattingService()
     maker = db.get_session_manager().async_session_maker
     async with maker() as session:
-        return await service.start_generation(session, None, auth.user_id, PROMPT)
+        return await service.start_generation(
+            session, None, auth.user_id, PROMPT, enable_thinking=False
+        )
 
 
 async def _drain(stream) -> list[str]:

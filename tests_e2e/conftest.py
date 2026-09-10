@@ -68,16 +68,17 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def app_client() -> AsyncIterator[httpx.AsyncClient]:
-    """App served by a real uvicorn listener on an ephemeral port.
+    """App served by one real uvicorn listener for the whole e2e session.
 
     httpx.ASGITransport cannot be used here: it runs the ASGI app to completion
     and returns the whole buffered body at once, so clients observe the first
     chunk only after the response finished — killing live-streaming semantics
     (mid-generation stop/conflict, concurrent requests on open streams).
-    Uvicorn runs on the test's event loop; lifespan stays off because the
-    startup/shutdown handlers are driven manually below.
+    Uvicorn runs on the session event loop; lifespan stays off because the
+    startup/shutdown handlers are driven manually below. Keeping the app alive
+    for the session also keeps global inference clients open between tests.
     """
     await _ensure_schema()
     from app import app
@@ -108,7 +109,7 @@ async def app_client() -> AsyncIterator[httpx.AsyncClient]:
     await app.router.shutdown()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def auth(app_client: httpx.AsyncClient) -> AsyncIterator[AuthContext]:
     """Register a fresh user through the real /api/auth flow."""
     suffix = uuid4().hex[:8]
