@@ -12,6 +12,7 @@ from crud.project import get_project_ids_for_user
 from crud.vector import VectorRepository, get_vector_repository
 from pipelines.embed import EmbeddingPipeline, get_embedding_pipeline
 from pipelines.fs import FileStore, get_file_store
+from pipelines.ingest import extract_text
 from schemas.file import ChunkResult, ChunkText, FileMeta
 from services.embedding_space import validate_for_read
 
@@ -60,6 +61,8 @@ async def project_scopes(
 
 
 def _decode(data: bytes) -> str:
+    # Legacy RAG helper; attached-file context must go through extract_text()
+    # with the file's own content type/name instead of this lossy decode.
     return data.decode("utf-8", errors="replace")
 
 
@@ -75,7 +78,11 @@ async def fetch_file(
         raise ValueError("File not found")
     file_store = file_store or get_file_store()
     data = await file_store.read(user_id, file_metadata.id)
-    return _decode(data)
+    return extract_text(
+        data,
+        content_type=file_metadata.content_type,
+        filename=file_metadata.name,
+    )
 
 
 async def list_project_files(

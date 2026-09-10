@@ -20,6 +20,23 @@ REQUEST_TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=60.0, pool=10.0)
 ChunkKind = Literal["thinking", "content"]
 
 
+class ContextLimitExceeded(ValueError):
+    """Templated prompt plus the output reserve does not fit the slot."""
+
+    def __init__(self, prompt_tokens: int, slot_tokens: int, reserve: int):
+        super().__init__(
+            f"prompt uses {prompt_tokens} tokens, reserve is {reserve}, "
+            f"slot holds {slot_tokens}"
+        )
+        self.prompt_tokens = prompt_tokens
+        self.slot_tokens = slot_tokens
+        self.reserve = reserve
+
+
+class BudgetServiceUnavailable(RuntimeError):
+    """Tokenizer/template/props interfaces missing or incompatible."""
+
+
 @dataclass(frozen=True)
 class ThinkingWiring:
     chat_template_kwargs: dict[str, Any] | None = None
@@ -48,6 +65,32 @@ def _thinking_payload_fields(model_name: str, enable_thinking: bool) -> dict[str
             return fields
     Logger.debug("No thinking wiring registered for model %s", model_name)
     return {}
+
+
+def get_output_reserve() -> int:
+    reserve = int(env.CHAT_MAX_OUTPUT_TOKENS)
+    if reserve <= 0:
+        raise RuntimeError("CHAT_MAX_OUTPUT_TOKENS must be positive")
+    return reserve
+
+
+def _extract_slot_context(props: dict[str, Any]) -> int:
+    candidates: list[Any] = [props.get("n_ctx")]
+    defaults = props.get("default_generation_settings")
+    if isinstance(defaults, dict):
+        candidates.append(defaults.get("n_ctx"))
+    params = props.get("params")
+    if isinstance(params, dict):
+        candidates.append(params.get("n_ctx"))
+    settings = props.get("generation_settings")
+    if isinstance(settings, dict):
+        candidates.append(settings.get("n_ctx"))
+    for candidate in candidates:
+        if isinstance(candidate, bool):
+            continue
+        if isinstance(candidate, (int, float)) and int(candidate) > 0:
+            return int(candidate)
+    raise BudgetServiceUnavailable("llama-server /props did not report n_ctx")
 
 
 class LLMPipeline:
@@ -97,6 +140,7 @@ class LLMPipeline:
         response_format: dict[str, Any] | None = None,
         grammar: str | None = None,
         enable_thinking: bool | None = None,
+        max_tokens: int | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self.__model_name,
@@ -104,6 +148,9 @@ class LLMPipeline:
             "temperature": temperature,
             "stream": stream,
         }
+        reserve = max_tokens if max_tokens is not None else get_output_reserve()
+        if reserve is not None:
+            payload["max_tokens"] = reserve
         if response_format is not None:
             payload["response_format"] = response_format
         if grammar is not None:
@@ -121,6 +168,7 @@ class LLMPipeline:
         response_format: dict[str, Any] | None = None,
         grammar: str | None = None,
         enable_thinking: bool | None = None,
+        max_tokens: int | None = None,
     ):
         payload = self._build_payload(
             history,
@@ -129,6 +177,7 @@ class LLMPipeline:
             response_format=response_format,
             grammar=grammar,
             enable_thinking=enable_thinking,
+            max_tokens=max_tokens,
         )
         response = await self.__client.post(
             f"{self.__base_url}/v1/chat/completions", json=payload
@@ -150,6 +199,7 @@ class LLMPipeline:
         response_format: dict[str, Any] | None = None,
         grammar: str | None = None,
         enable_thinking: bool | None = None,
+        max_tokens: int | None = None,
     ) -> AsyncGenerator[tuple[ChunkKind, str], None]:
         payload = self._build_payload(
             history,
@@ -158,6 +208,7 @@ class LLMPipeline:
             response_format=response_format,
             grammar=grammar,
             enable_thinking=enable_thinking,
+            max_tokens=max_tokens,
         )
         async with self.__client.stream(
             "POST", f"{self.__base_url}/v1/chat/completions", json=payload
@@ -215,6 +266,79 @@ class LLMPipeline:
             return []
         return await asyncio.gather(*(self._count_tokens(text) for text in texts))
 
+    async def render_prompt(
+        self, history: list[dict[str, Any]], enable_thinking: bool | None = None
+    ) -> str:
+        """Render the full prompt through the server chat template.
+
+        Counts every byte the model will see: system, files, history, the
+        current request, special tokens, and the assistant prefix. The same
+        thinking/template params as generation are applied; per-line sums or
+        character estimates are never used.
+        """
+        payload: dict[str, Any] = {"messages": history, "add_assistant": True}
+        if enable_thinking is not None:
+            payload.update(
+                _thinking_payload_fields(self.__model_name, enable_thinking=enable_thinking)
+            )
+        try:
+            response = await self.__client.post(
+                f"{self.__base_url}/apply-template", json=payload
+            )
+            response.raise_for_status()
+            data = response.json()
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            raise BudgetServiceUnavailable(
+                "llama-server template interface unavailable or incompatible"
+            ) from exc
+        prompt = data.get("prompt") if isinstance(data, dict) else None
+        if not isinstance(prompt, str) or not prompt:
+            raise BudgetServiceUnavailable("llama-server /apply-template returned no prompt")
+        return prompt
+
+    async def get_slot_context_tokens(self) -> int:
+        try:
+            response = await self.__client.get(f"{self.__base_url}/props")
+            response.raise_for_status()
+            data = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise BudgetServiceUnavailable("llama-server props interface unavailable") from exc
+        if not isinstance(data, dict):
+            raise BudgetServiceUnavailable("llama-server /props returned no object")
+        return _extract_slot_context(data)
+
+    async def count_prompt_tokens(self, prompt: str) -> int:
+        try:
+            return await self._count_tokens(prompt)
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            raise BudgetServiceUnavailable(
+                "llama-server tokenizer interface unavailable"
+            ) from exc
+
+    async def check_token_budget(
+        self,
+        history: list[dict[str, Any]],
+        enable_thinking: bool | None = None,
+        *,
+        reserve: int | None = None,
+    ) -> int:
+        """Admit only prompt_tokens + reserve <= slot context.
+
+        Returns the exact templated prompt token count for logging/e2e
+        comparison against the server's prompt usage. Raises
+        ContextLimitExceeded on overflow, BudgetServiceUnavailable when the
+        preflight interfaces are missing or incompatible — never approximate.
+        """
+        limit = reserve if reserve is not None else get_output_reserve()
+        if limit <= 0:
+            raise RuntimeError("CHAT_MAX_OUTPUT_TOKENS must be positive")
+        prompt = await self.render_prompt(history, enable_thinking)
+        prompt_tokens = await self.count_prompt_tokens(prompt)
+        slot_tokens = await self.get_slot_context_tokens()
+        if prompt_tokens + limit > slot_tokens:
+            raise ContextLimitExceeded(prompt_tokens, slot_tokens, limit)
+        return prompt_tokens
+
 
 def _resolve_chat_model() -> tuple[str, str]:
     if env.CHAT_BASE_URL is None and env.CHAT_MODEL is None:
@@ -248,7 +372,10 @@ async def close_inference_pipelines() -> None:
 
 
 __all__ = [
+    "BudgetServiceUnavailable",
+    "ContextLimitExceeded",
     "LLMPipeline",
     "close_inference_pipelines",
     "get_inference_pipeline",
+    "get_output_reserve",
 ]

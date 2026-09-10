@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import FileHasProject, FileHasThread, FileMetadata
@@ -38,6 +38,36 @@ async def get_file_for_user(
 async def list_user_files(session: AsyncSession, user_id: str) -> list[FileMetadata]:
     result = await session.execute(
         select(FileMetadata).where(FileMetadata.user_id == user_id).order_by(FileMetadata.name)
+    )
+    return list(result.scalars().all())
+
+
+async def get_files_for_user(
+    session: AsyncSession, file_ids: Sequence[str], user_id: str
+) -> list[FileMetadata]:
+    """Batch metadata fetch for owned files; used to validate fileIds in one query."""
+    if not file_ids:
+        return []
+    result = await session.execute(
+        select(FileMetadata).where(
+            FileMetadata.id.in_(list(dict.fromkeys(file_ids))),
+            FileMetadata.user_id == user_id,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def list_thread_files(
+    session: AsyncSession, thread_id: str, user_id: str
+) -> list[FileMetadata]:
+    """Files linked to an owned thread. Foreign threads yield an empty list."""
+    result = await session.execute(
+        select(FileMetadata)
+        .join(FileHasThread, FileHasThread.file_id == FileMetadata.id)
+        .where(
+            FileHasThread.thread_id == thread_id,
+            FileMetadata.user_id == user_id,
+        )
     )
     return list(result.scalars().all())
 
@@ -96,6 +126,16 @@ async def get_thread_link(
     return result.scalar_one_or_none()
 
 
+async def count_thread_files(session: AsyncSession, thread_id: str) -> int:
+    """Number of files linked to a thread; enforces MAX_THREAD_ATTACHMENTS."""
+    result = await session.execute(
+        select(func.count())
+        .select_from(FileHasThread)
+        .where(FileHasThread.thread_id == thread_id)
+    )
+    return int(result.scalar_one())
+
+
 async def get_project_link(
     session: AsyncSession, file_id: str, project_id: str
 ) -> FileHasProject | None:
@@ -124,16 +164,34 @@ async def link_file_to_project(
     return link
 
 
+async def get_thread_ids_for_file(session: AsyncSession, file_id: str) -> list[str]:
+    result = await session.execute(
+        select(FileHasThread.thread_id).where(FileHasThread.file_id == file_id)
+    )
+    return list(result.scalars().all())
+
+
+async def delete_thread_link(session: AsyncSession, file_id: str, thread_id: str) -> None:
+    link = await get_thread_link(session, file_id, thread_id)
+    if link is not None:
+        await session.delete(link)
+
+
 __all__ = [
+    "count_thread_files",
     "create_file",
     "delete_file",
+    "delete_thread_link",
     "get_file_for_user",
+    "get_files_for_user",
     "get_project_link",
     "get_project_index_statuses",
     "get_owned_file_ids",
+    "get_thread_ids_for_file",
     "get_thread_link",
     "link_file_to_project",
     "link_file_to_thread",
     "list_project_files",
+    "list_thread_files",
     "list_user_files",
 ]

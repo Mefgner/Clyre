@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1500
     CHUNK_OVERLAP: int = 200
 
+    # M3 chat attachments: all values must stay positive.
+    MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024
+    MAX_THREAD_ATTACHMENTS: int = 16
+    CHAT_MAX_OUTPUT_TOKENS: int = 1024
+
     class Config:
         env_file = env_file()
         extra = "ignore"

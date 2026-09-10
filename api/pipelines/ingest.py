@@ -17,14 +17,38 @@ class UnsupportedFileType(ValueError):
     pass
 
 
+class UndecodableFileText(ValueError):
+    """Bytes claim a text type but are not strict UTF-8 or contain NUL."""
+
+    def __init__(self, detail: str = "file is not valid UTF-8 text"):
+        super().__init__(detail)
+
+
+def normalize_content_type(content_type: str | None) -> str:
+    """Lowercase MIME without parameters (\"text/plain; charset=utf-8\" -> \"text/plain\")."""
+    return (content_type or "").split(";")[0].strip().lower()
+
+
+def is_supported_text_type(content_type: str | None, filename: str | None) -> bool:
+    ctype = normalize_content_type(content_type)
+    if ctype.startswith("text/"):
+        return True
+    return (filename or "").lower().endswith(_TEXT_EXTENSIONS)
+
+
 def extract_text(
     data: bytes, *, content_type: str | None = None, filename: str | None = None
 ) -> str:
-    name = (filename or "").lower()
-    ctype = (content_type or "").lower()
-    if ctype.startswith("text/") or name.endswith(_TEXT_EXTENSIONS):
-        return data.decode("utf-8", errors="replace")
-    raise UnsupportedFileType(content_type or filename or "unknown content type")
+    if not is_supported_text_type(content_type, filename):
+        raise UnsupportedFileType(content_type or filename or "unknown content type")
+    try:
+        # utf-8-sig accepts and strips a BOM while rejecting invalid sequences.
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise UndecodableFileText("file is not valid UTF-8 text") from exc
+    if "\x00" in text:
+        raise UndecodableFileText("file contains NUL bytes and is not plain text")
+    return text
 
 
 def chunk_text(text: str, *, chunk_size: int = 1500, overlap: int = 200) -> list[TextChunk]:
@@ -58,4 +82,12 @@ def chunk_text(text: str, *, chunk_size: int = 1500, overlap: int = 200) -> list
     return chunks
 
 
-__all__ = ["TextChunk", "UnsupportedFileType", "extract_text", "chunk_text"]
+__all__ = [
+    "TextChunk",
+    "UndecodableFileText",
+    "UnsupportedFileType",
+    "chunk_text",
+    "extract_text",
+    "is_supported_text_type",
+    "normalize_content_type",
+]

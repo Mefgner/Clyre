@@ -39,6 +39,7 @@ class FakePipeline:
         ]
         self.calls = []
         self.sync_calls = []
+        self.budget_calls = []
 
     async def chat_completion_sync(self, history, **kwargs):
         self.sync_calls.append(dict(kwargs))
@@ -49,11 +50,24 @@ class FakePipeline:
         for chunk in self._chunks:
             yield chunk
 
+    async def check_token_budget(self, history, enable_thinking=None, **kwargs):
+        self.budget_calls.append(
+            {"history": list(history), "enable_thinking": enable_thinking, **kwargs}
+        )
+        return 10
+
 
 class ExplodingPipeline(FakePipeline):
     async def chat_completion_stream(self, history, **kwargs):
         raise RuntimeError("llama exploded")
         yield  # pragma: no cover
+
+
+class PartialExplodingPipeline(FakePipeline):
+    async def chat_completion_stream(self, history, **kwargs):
+        self.calls.append({"history": list(history), **kwargs})
+        yield "content", "Partial"
+        raise RuntimeError("llama exploded after a chunk")
 
 
 class SlowPipeline(FakePipeline):
@@ -144,6 +158,7 @@ async def test_stream_event_order_new_thread(client):
     ]
     thread_id = events[0]["threadId"]
     assert thread_id
+    assert response.headers["x-clyre-thread-id"] == thread_id
     assert [event["chunk"] for event in events if event["event"] == "new_chunk"] == CHUNKS
     assert events[3]["threadId"] == thread_id
     assert events[4]["threadId"] is None
@@ -287,6 +302,15 @@ def test_streaming_block_schema_rejects_unknown_event():
         StreamingBlock.model_validate({"chunk": None, "event": "unknown_event"})
 
 
+def test_streaming_block_schema_accepts_error_event():
+    from schemas.chatting import StreamingBlock
+
+    block = StreamingBlock.model_validate(
+        {"chunk": "Generation failed. Please try again.", "event": "error"}
+    )
+    assert block.event == "error"
+
+
 async def test_replay_from_offset_zero_is_identical(client):
     http, _ = client
     response = await http.post("/api/chat/stream", json={"message": "Hi"})
@@ -312,6 +336,109 @@ async def test_replay_from_mid_offset_yields_tail_only(client):
 
     tail = parse_events("".join([line async for line in run.subscribe(3)]))
     assert [event["event"] for event in tail] == ["assistant_message_insert", "done"]
+
+
+async def test_http_attach_replays_tail_without_starting_generation(client):
+    http, fake = client
+    response = await http.post("/api/chat/stream", json={"message": "Hi"})
+    thread_id = response.headers["x-clyre-thread-id"]
+    calls_before_attach = len(fake.calls)
+    messages_before_attach = await fetch_messages(thread_id)
+
+    attached = await http.get(f"/api/chat/stream/{thread_id}?offset=3")
+
+    assert attached.status_code == 200
+    assert attached.headers["x-clyre-thread-id"] == thread_id
+    assert [event["event"] for event in parse_events(attached.text)] == [
+        "assistant_message_insert",
+        "done",
+    ]
+    assert len(fake.calls) == calls_before_attach
+    messages_after_attach = await fetch_messages(thread_id)
+    assert [message.id for message in messages_after_attach] == [
+        message.id for message in messages_before_attach
+    ]
+
+
+async def test_http_attach_follows_active_generation(client, user_id, monkeypatch):
+    slow = SlowPipeline(CHUNKS)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: slow)
+    http, _ = client
+    thread_id = await _create_thread(user_id)
+    run = await _start_slow_generation(user_id, thread_id)
+
+    attached = await http.get(f"/api/chat/stream/{thread_id}?offset=0")
+
+    assert attached.status_code == 200
+    assert get_run(thread_id) is run
+    assert [event["event"] for event in parse_events(attached.text)] == [
+        "user_message_insert",
+        "new_chunk",
+        "new_chunk",
+        "assistant_message_insert",
+        "done",
+    ]
+    assert len(slow.calls) == 1
+
+
+async def test_http_attach_rejects_offset_beyond_buffer(client):
+    http, _ = client
+    response = await http.post("/api/chat/stream", json={"message": "Hi"})
+    thread_id = response.headers["x-clyre-thread-id"]
+
+    too_far = await http.get(f"/api/chat/stream/{thread_id}?offset=999")
+    negative = await http.get(f"/api/chat/stream/{thread_id}?offset=-1")
+
+    assert too_far.status_code == 416
+    assert negative.status_code == 422
+
+
+async def test_http_attach_returns_gone_after_run_eviction(client, monkeypatch):
+    import services.generation as generation_module
+
+    monkeypatch.setattr(generation_module, "EVENTS_GRACE_SECONDS", 0.01)
+    http, _ = client
+    response = await http.post("/api/chat/stream", json={"message": "Hi"})
+    thread_id = response.headers["x-clyre-thread-id"]
+    await asyncio.sleep(0.05)
+
+    attached = await http.get(f"/api/chat/stream/{thread_id}?offset=0")
+
+    assert attached.status_code == 410
+
+
+async def test_http_attach_hides_foreign_thread(client, user_id):
+    http, _ = client
+    response = await http.post("/api/chat/stream", json={"message": "Hi"})
+    thread_id = response.headers["x-clyre-thread-id"]
+
+    async with db.get_session_manager().async_session_maker() as session:
+        stranger = User()
+        session.add(stranger)
+        await session.commit()
+        stranger_id = stranger.id
+
+    async def _stranger_auth() -> TokenPayload:
+        return TokenPayload(
+            user_id=stranger_id,
+            timestamp=timing.get_utc_now().timestamp(),
+            refresh_token_id=None,
+        )
+
+    app.dependency_overrides[web.extract_access_token] = _stranger_auth
+    try:
+        attached = await http.get(f"/api/chat/stream/{thread_id}?offset=0")
+        assert attached.status_code == 404
+    finally:
+
+        async def _owner_auth() -> TokenPayload:
+            return TokenPayload(
+                user_id=user_id,
+                timestamp=timing.get_utc_now().timestamp(),
+                refresh_token_id=None,
+            )
+
+        app.dependency_overrides[web.extract_access_token] = _owner_auth
 
 
 async def test_disconnect_does_not_stop_generation(client, user_id):
@@ -395,7 +522,18 @@ async def test_failed_generation_marks_journal_and_drops_empty_message(
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
             response = await http.post("/api/chat/stream", json={"message": "Boom"})
-            thread_id = parse_events(response.text)[0]["threadId"]
+            events = parse_events(response.text)
+            thread_id = events[0]["threadId"]
+            assert [event["event"] for event in events[-3:]] == [
+                "assistant_message_insert",
+                "error",
+                "done",
+            ]
+            assert events[-2] == {
+                "chunk": "Generation failed. Please try again.",
+                "event": "error",
+                "threadId": thread_id,
+            }
             run = get_run(thread_id)
             assert run is not None
             assert run.journal_id is not None
@@ -407,6 +545,41 @@ async def test_failed_generation_marks_journal_and_drops_empty_message(
 
             messages = await fetch_messages(thread_id)
             assert [m.role for m in messages] == ["user"]
+    finally:
+        app.dependency_overrides.pop(web.extract_access_token, None)
+
+
+async def test_failed_generation_preserves_partial_content(user_id, monkeypatch, tables):
+    fake = PartialExplodingPipeline(CHUNKS)
+    monkeypatch.setattr(chatting_module, "get_inference_pipeline", lambda: fake)
+
+    async def _auth() -> TokenPayload:
+        return TokenPayload(
+            user_id=user_id,
+            timestamp=timing.get_utc_now().timestamp(),
+            refresh_token_id=None,
+        )
+
+    app.dependency_overrides[web.extract_access_token] = _auth
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+            response = await http.post("/api/chat/stream", json={"message": "Boom later"})
+            events = parse_events(response.text)
+            thread_id = response.headers["x-clyre-thread-id"]
+
+            assert [event["event"] for event in events] == [
+                "user_message_insert",
+                "new_chunk",
+                "assistant_message_insert",
+                "error",
+                "done",
+            ]
+            messages = await fetch_messages(thread_id)
+            assert [(message.role, message.inline_value) for message in messages] == [
+                ("user", "Boom later"),
+                ("assistant", "Partial"),
+            ]
     finally:
         app.dependency_overrides.pop(web.extract_access_token, None)
 
@@ -596,7 +769,7 @@ async def test_stop_and_retry_require_auth(tables):
 async def test_retry_nonexistent_thread_returns_400(client):
     http, _ = client
     response = await http.post("/api/chat/retry", json={"threadId": str(uuid.uuid4())})
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 async def test_retry_passes_enable_thinking_to_pipeline(client):

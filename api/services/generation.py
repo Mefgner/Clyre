@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import weakref
 from collections.abc import AsyncGenerator
 from enum import Enum
 
@@ -9,6 +10,26 @@ from db import get_session_manager
 from models import GenerationRunRow
 
 Logger = logging.getLogger(__name__)
+
+# Serializes generation-start against attachment mutations (attach/detach/
+# file delete): the active-run check and the mutation must be one atomic
+# section. Single API process only — no distributed locks.
+#
+# One lock per running loop: a module-global asyncio.Lock binds to the first
+# loop that contends on it and refuses every later loop, which is exactly
+# what the multi-loop unit suite does. Production runs a single loop, so
+# per-loop locks preserve the mutual exclusion where it matters.
+_loop_mutexes: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def get_generation_mutex() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _loop_mutexes.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _loop_mutexes[loop] = lock
+    return lock
+
 
 # Late reconnects may still replay the buffered events this long after the run
 # reached a terminal state. Patchable in tests.
@@ -97,6 +118,11 @@ class GenerationRun:
     @property
     def done(self) -> bool:
         return self.status is not GenerationStatus.RUNNING
+
+    @property
+    def event_count(self) -> int:
+        """Number of buffered events available to offset-based subscribers."""
+        return len(self._events)
 
     async def wait_done(self) -> None:
         if self._task is not None:

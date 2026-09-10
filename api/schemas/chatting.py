@@ -8,6 +8,7 @@ class UserChatRequest(BaseModel):
     message: Annotated[str, MinLen(1)]
     thread_id: Annotated[str | None, Field(alias="threadId")] = None
     enable_thinking: Annotated[bool | None, Field(alias="enableThinking")] = None
+    file_ids: Annotated[list[str], Field(alias="fileIds")] = []
 
 
 class ThreadRequest(BaseModel):
@@ -27,6 +28,7 @@ class StreamingBlock(BaseModel):
         "assistant_message_insert",
         "new_chunk",
         "new_thinking_chunk",
+        "error",
         "done",
     ]
     thread_id: Annotated[str | None, Field(serialization_alias="threadId")] = None

@@ -6,6 +6,7 @@ from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import get_db_session
+from schemas.files import FileResponse
 from schemas.general import TokenPayload
 from schemas.thread import GetAllThreadsResponse, GetThreadResponse
 from services.thread import ThreadService
@@ -57,5 +58,17 @@ async def delete_thread(
     try:
         await thread_sc.delete_thread(session, user_id, thread_id)
         return {"result": "ok"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail="Thread not found") from e
+
+
+@thread_router.get("/{thread_id}/files", response_model=list[FileResponse])
+async def list_thread_files_view(
+    thread_id: str,
+    token_payload: Annotated[TokenPayload, Depends(web.extract_access_token)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    try:
+        return await thread_sc.thread_files(session, token_payload.user_id, thread_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail="Thread not found") from e

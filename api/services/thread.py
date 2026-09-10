@@ -5,6 +5,7 @@ from crud import (
     get_running_run_thread_ids,
     get_thread_by_id,
     get_user_by_id,
+    list_thread_files,
 )
 from crud.thread import delete_thread
 from services.generation import active_run_thread_ids, get_run
@@ -53,6 +54,22 @@ class ThreadService:
         _mark_generating([thread], active)
 
         return thread
+
+    @staticmethod
+    async def thread_files(session, user_id: str, thread_id: str):
+        user = await get_user_by_id(session, user_id)
+
+        if not user:
+            raise ValueError("User not found")
+
+        thread = await get_thread_by_id(session, thread_id, user.id, load_messages=False)
+
+        if not thread:
+            raise ValueError("Thread not found")
+
+        # Python-side sort keeps order stable across SQLite/PostgreSQL collations.
+        files = await list_thread_files(session, thread_id, user.id)
+        return sorted(files, key=lambda f: (f.name, f.id))
 
     @staticmethod
     async def delete_thread(session, user_id: str, thread_id: str):

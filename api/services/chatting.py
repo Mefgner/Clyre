@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,8 @@ from crud import (
     get_messages_in_thread,
     get_running_run_for_thread,
     get_thread_by_id,
+    link_file_to_thread,
+    list_thread_files,
     update_thread_time,
 )
 from crud.message import (
@@ -23,16 +26,23 @@ from db import get_session_manager
 from models import GenerationRunRow, Message, Thread
 from pipelines.inference import get_inference_pipeline
 from schemas.chatting import StreamingBlock
+from services.chat_context import (
+    AttachedFile,
+    AttachmentLimitExceeded,
+    build_chat_context,
+    prepare_attached_files,
+)
 from services.generation import (
     PARTIAL_FLUSH_SECONDS,
     GenerationConflict,
     GenerationRun,
     GenerationStatus,
+    get_generation_mutex,
     get_run,
     register_run,
     schedule_eviction,
 )
-from utils import timing
+from utils import env, timing
 
 Logger = logging.getLogger(__name__)
 Logger.setLevel(logging.DEBUG)
@@ -47,11 +57,41 @@ DEFAULT_SYSTEM_PROMPT = (
     "Format answers with Markdown."
 )
 
-# Serializes generation starts process-wide: the active-run check, the
-# user-message save (incl. the title call) and run registration must be one
-# atomic section — two concurrent sends on a thread would otherwise both pass
-# the check and the second registration orphans the first run.
-_generation_start_lock = asyncio.Lock()
+
+@dataclass(slots=True)
+class _PreparedStart:
+    is_new: bool
+    thread: Thread | None
+    title: str | None
+    prompt: list[dict[str, str]]
+    attached: list[AttachedFile]
+    union_ids: list[str]
+    existing_ids: list[str]
+    persisted: list[Message]
+    prompt_tokens: int
+
+
+@dataclass(slots=True)
+class _PreparedRetry:
+    thread: Thread
+    prompt: list[dict[str, str]]
+    attached: list[AttachedFile]
+    union_ids: list[str]
+    victim_order: int
+    prompt_tokens: int
+
+
+def _dedupe_ids(file_ids: Iterable[str] | None) -> list[str]:
+    if not file_ids:
+        return []
+    return list(dict.fromkeys(fid for fid in file_ids if fid))
+
+
+def _attachment_limit() -> int:
+    limit = int(env.MAX_THREAD_ATTACHMENTS)
+    if limit <= 0:
+        raise RuntimeError("MAX_THREAD_ATTACHMENTS must be positive")
+    return limit
 
 
 class ChattingService:
@@ -183,6 +223,111 @@ class ChattingService:
         if not thread:
             raise ValueError("Thread not found")
 
+    async def _prepare_start(
+        self,
+        session: AsyncSession,
+        thread_id: str | None,
+        user_id: str,
+        message: str,
+        file_ids: list[str],
+        enable_thinking: bool | None,
+    ) -> _PreparedStart:
+        new_ids = _dedupe_ids(file_ids)
+        if thread_id is not None:
+            await self._ensure_owned_thread(session, thread_id, user_id)
+            await self._ensure_no_active(session, thread_id)
+            thread = await get_thread_by_id(session, thread_id, user_id)
+            if not thread:
+                raise ValueError("Thread not found")
+            persisted = list(await get_messages_in_thread(session, thread_id, user_id))
+            existing_rows = await list_thread_files(session, thread_id, user_id)
+            existing_ids = [row.id for row in existing_rows]
+        else:
+            thread = None
+            persisted = []
+            existing_ids = []
+
+        union_ids = list(dict.fromkeys([*existing_ids, *new_ids]))
+        limit = _attachment_limit()
+        if len(union_ids) > limit:
+            raise AttachmentLimitExceeded(len(union_ids), limit)
+
+        attached = await prepare_attached_files(session, user_id, union_ids)
+
+        # Transient current message: budget is verified before any row exists,
+        # so a failed preflight creates no thread, messages, journal, or links.
+        transient = Message(
+            role="user",
+            inline_value=message,
+            thinking_value=None,
+            hash="",
+            user_id=user_id,
+            thread_id=thread_id or "",
+            order=(persisted[-1].order + 1) if persisted else 0,
+        )
+        prompt = build_chat_context(
+            [*persisted, transient], attached, base_prompt=DEFAULT_SYSTEM_PROMPT
+        )
+        prompt_tokens = await get_inference_pipeline().check_token_budget(
+            prompt, enable_thinking
+        )
+
+        title: str | None = None
+        if thread is None:
+            title = await self.generate_thread_title(message)
+        return _PreparedStart(
+            is_new=thread is None,
+            thread=thread,
+            title=title,
+            prompt=prompt,
+            attached=attached,
+            union_ids=union_ids,
+            existing_ids=existing_ids,
+            persisted=persisted,
+            prompt_tokens=prompt_tokens,
+        )
+
+    async def _prepare_retry(
+        self,
+        session: AsyncSession,
+        thread_id: str,
+        user_id: str,
+        enable_thinking: bool | None,
+    ) -> _PreparedRetry:
+        await self._ensure_owned_thread(session, thread_id, user_id)
+        await self._ensure_no_active(session, thread_id)
+
+        thread = await get_thread_by_id(session, thread_id, user_id)
+        if not thread:
+            raise ValueError("Thread not found")
+
+        messages = list(thread.messages)
+        if not messages or messages[-1].role != "assistant":
+            raise GenerationConflict("Nothing to retry")
+
+        victim_order = messages[-1].order
+        # The victim is the trailing assistant; everything else is context.
+        kept = messages[:-1]
+
+        existing_rows = await list_thread_files(session, thread_id, user_id)
+        union_ids = [row.id for row in existing_rows]
+        limit = _attachment_limit()
+        if len(union_ids) > limit:  # pragma: no cover - defensive; links were capped
+            raise AttachmentLimitExceeded(len(union_ids), limit)
+        attached = await prepare_attached_files(session, user_id, union_ids)
+        prompt = build_chat_context(kept, attached, base_prompt=DEFAULT_SYSTEM_PROMPT)
+        prompt_tokens = await get_inference_pipeline().check_token_budget(
+            prompt, enable_thinking
+        )
+        return _PreparedRetry(
+            thread=thread,
+            prompt=prompt,
+            attached=attached,
+            union_ids=union_ids,
+            victim_order=victim_order,
+            prompt_tokens=prompt_tokens,
+        )
+
     async def start_generation(
         self,
         session: AsyncSession,
@@ -190,27 +335,89 @@ class ChattingService:
         user_id: str,
         message: str,
         enable_thinking: bool | None = None,
+        file_ids: list[str] | None = None,
     ) -> GenerationRun:
         if thread_id is not None:
             await self._ensure_owned_thread(session, thread_id, user_id)
 
-        async with _generation_start_lock:
-            if thread_id is not None:
-                await self._ensure_no_active(session, thread_id)
+        async with get_generation_mutex():
+            # _prepare_start repeats the ownership + activity checks under the
+            # same lock as the file batch validation and the commit.
+            try:
+                prepared = await self._prepare_start(
+                    session,
+                    thread_id,
+                    user_id,
+                    message,
+                    _dedupe_ids(file_ids),
+                    enable_thinking,
+                )
+            except Exception:
+                await session.rollback()
+                raise
 
-            _, thread_id = await self.save_message(
-                session,
-                user_id,
-                message,
-                "user",
-                thread_id,
+            try:
+                if prepared.is_new:
+                    thread_row = await create_thread(
+                        session, user_id=user_id, title=prepared.title or "New Thread"
+                    )
+                    # Flush the header first: GenerationRunRow has no ORM
+                    # relationship to Thread, so the unit of work cannot order
+                    # the inserts itself (flush, not commit — atomicity stays).
+                    await session.flush()
+                    resolved_thread_id = thread_row.id
+                    last_order = -1
+                else:
+                    assert prepared.thread is not None
+                    thread_row = prepared.thread
+                    resolved_thread_id = thread_row.id
+                    last_order = prepared.persisted[-1].order if prepared.persisted else -1
+
+                # Link only genuinely new ids; re-attach is a no-op by id.
+                already = set(prepared.existing_ids)
+                for fid in prepared.union_ids:
+                    if fid not in already:
+                        await link_file_to_thread(session, fid, resolved_thread_id)
+
+                await create_message(
+                    session,
+                    user_id=user_id,
+                    thread_id=resolved_thread_id,
+                    role="user",
+                    content=message,
+                    order=last_order + 1,
+                )
+                await update_thread_time(session, thread_row, timing.get_utc_now())
+                journal_row = await create_generation_run(session, resolved_thread_id, user_id)
+                reserved = await reserve_assistant_message(
+                    session,
+                    user_id=user_id,
+                    thread_id=resolved_thread_id,
+                    order=last_order + 2,
+                )
+                await session.commit()
+            except Exception:
+                # A failed commit must not leave a partially accepted start:
+                # no run is registered and no background task is launched.
+                await session.rollback()
+                raise
+
+            Logger.debug(
+                "User message saved for thread_id: %s (files=%d prompt_tokens=%d)",
+                resolved_thread_id,
+                len(prepared.attached),
+                prepared.prompt_tokens,
             )
 
-            await session.commit()
-
-            Logger.debug("User message saved for thread_id: %s", thread_id)
-
-            return await self._launch(session, thread_id, user_id, enable_thinking)
+            return await self._launch_with_prompt(
+                session,
+                resolved_thread_id,
+                user_id,
+                enable_thinking,
+                prepared.prompt,
+                journal_row.id,
+                reserved.id,
+            )
 
     async def retry_generation(
         self,
@@ -222,28 +429,52 @@ class ChattingService:
         """Regenerate the trailing assistant message in place (retry policy in PLAN 2.7)."""
         await self._ensure_owned_thread(session, thread_id, user_id)
 
-        async with _generation_start_lock:
-            await self._ensure_no_active(session, thread_id)
+        async with get_generation_mutex():
+            try:
+                prepared = await self._prepare_retry(
+                    session, thread_id, user_id, enable_thinking
+                )
+            except Exception:
+                await session.rollback()
+                raise
 
-            thread = await get_thread_by_id(session, thread_id, user_id)
-            if not thread:
-                raise ValueError("Thread not found")
+            try:
+                # Delete the failed answer and reserve its replacement in one
+                # transaction: an unsuccessful retry keeps the previous answer.
+                victim = None
+                for msg in prepared.thread.messages:
+                    if msg.role == "assistant" and msg.order == prepared.victim_order:
+                        victim = msg
+                        break
+                if victim is None:
+                    raise GenerationConflict("Nothing to retry")
+                await session.delete(victim)
+                await session.flush()
+                Logger.info(
+                    "Retry: deleted trailing assistant message thread=%s order=%d",
+                    thread_id,
+                    prepared.victim_order,
+                )
+                journal_row = await create_generation_run(session, thread_id, user_id)
+                reserved = await reserve_assistant_message(
+                    session,
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    order=prepared.victim_order,
+                )
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
 
-            messages = list(thread.messages)
-            if not messages or messages[-1].role != "assistant":
-                raise GenerationConflict("Nothing to retry")
-
-            order = messages[-1].order
-            await session.delete(messages[-1])
-            await session.commit()
-            Logger.info(
-                "Retry: deleted trailing assistant message thread=%s order=%d",
+            return await self._launch_with_prompt(
+                session,
                 thread_id,
-                order,
-            )
-
-            return await self._launch(
-                session, thread_id, user_id, enable_thinking, forced_order=order
+                user_id,
+                enable_thinking,
+                prepared.prompt,
+                journal_row.id,
+                reserved.id,
             )
 
     @staticmethod
@@ -343,13 +574,20 @@ class ChattingService:
                     await finish_generation_run(fresh_session, row, status.value)
                 await fresh_session.commit()
 
-        async def emit_terminal() -> None:
+        async def emit_terminal(error_message: str | None = None) -> None:
             await run.publish(
                 StreamingBlock(
                     chunk=None, event="assistant_message_insert", thread_id=thread_id
                 ).model_dump_json(by_alias=True)
                 + "\n"
             )
+            if error_message is not None:
+                await run.publish(
+                    StreamingBlock(
+                        chunk=error_message, event="error", thread_id=thread_id
+                    ).model_dump_json(by_alias=True)
+                    + "\n"
+                )
             await run.publish(
                 StreamingBlock(chunk=None, event="done").model_dump_json(by_alias=True) + "\n"
             )
@@ -428,12 +666,196 @@ class ChattingService:
                     len(run.thinking),
                 )
                 await flush_partial(force=True)
-                await emit_terminal()
+                await emit_terminal("Generation failed. Please try again.")
             finally:
                 # A failed journal write must never wedge the run: skipping
                 # finish() hangs every subscriber and 409-locks the thread
                 # until process restart. Finalize is best-effort; the terminal
                 # transition itself is mandatory.
+                try:
+                    await finalize_journal(status)
+                except Exception:
+                    Logger.exception(
+                        "Journal finalize failed thread=%s run=%s status=%s",
+                        thread_id,
+                        run.journal_id,
+                        status.value,
+                    )
+                await run.finish(status)
+                schedule_eviction(run)
+                Logger.info(
+                    "Generation terminal thread=%s run=%s status=%s duration=%.3fs "
+                    "first_token=%.3fs content_chunks=%d thinking_chunks=%d "
+                    "response_chars=%d thinking_chars=%d",
+                    thread_id,
+                    run.journal_id,
+                    status.value,
+                    loop.time() - started_at,
+                    (first_token_at - started_at) if first_token_at is not None else -1.0,
+                    content_chunks,
+                    thinking_chunks,
+                    len(run.response),
+                    len(run.thinking),
+                )
+
+        run.attach_task(asyncio.create_task(execute()))
+        return run
+
+    async def _launch_with_prompt(
+        self,
+        session: AsyncSession,
+        thread_id: str,
+        user_id: str,
+        enable_thinking: bool | None,
+        history: list[dict[str, str]],
+        journal_id: str,
+        reserved_id: str,
+    ) -> GenerationRun:
+        """Register and run background generation for an already-committed start."""
+        _ = session  # commit happened in the caller; background uses fresh sessions.
+        llama = get_inference_pipeline()
+
+        run = GenerationRun(thread_id, journal_id)
+        register_run(run)
+        Logger.info(
+            "Generation starting thread=%s user=%s run=%s thinking=%s history=%d",
+            thread_id,
+            user_id,
+            journal_id,
+            bool(enable_thinking),
+            len(history),
+        )
+
+        async def _load_reserved(fresh_session: AsyncSession) -> Message | None:
+            return await fresh_session.get(Message, reserved_id)
+
+        async def flush_partial(force: bool = False) -> None:
+            now = asyncio.get_running_loop().time()
+            if not force and now - run.last_flush < PARTIAL_FLUSH_SECONDS:
+                return
+            run.last_flush = now
+            try:
+                async with get_session_manager().async_session_maker() as fresh_session:
+                    message = await _load_reserved(fresh_session)
+                    if message is not None:
+                        await update_message_content(
+                            fresh_session, message, run.response, run.thinking or None
+                        )
+                        await fresh_session.commit()
+            except Exception:
+                Logger.exception(
+                    "Partial flush failed thread=%s run=%s", thread_id, run.journal_id
+                )
+
+        async def finalize_journal(status: GenerationStatus) -> None:
+            async with get_session_manager().async_session_maker() as fresh_session:
+                message = await _load_reserved(fresh_session)
+                if message is not None:
+                    if run.response == "" and run.thinking == "":
+                        await fresh_session.delete(message)
+                    else:
+                        await update_message_content(
+                            fresh_session, message, run.response, run.thinking or None
+                        )
+                row = await fresh_session.get(GenerationRunRow, run.journal_id)
+                if row is not None:
+                    await finish_generation_run(fresh_session, row, status.value)
+                await fresh_session.commit()
+
+        async def emit_terminal(error_message: str | None = None) -> None:
+            await run.publish(
+                StreamingBlock(
+                    chunk=None, event="assistant_message_insert", thread_id=thread_id
+                ).model_dump_json(by_alias=True)
+                + "\n"
+            )
+            if error_message is not None:
+                await run.publish(
+                    StreamingBlock(
+                        chunk=error_message, event="error", thread_id=thread_id
+                    ).model_dump_json(by_alias=True)
+                    + "\n"
+                )
+            await run.publish(
+                StreamingBlock(chunk=None, event="done").model_dump_json(by_alias=True) + "\n"
+            )
+
+        async def execute() -> None:
+            loop = asyncio.get_running_loop()
+            started_at = loop.time()
+            first_token_at: float | None = None
+            content_chunks = 0
+            thinking_chunks = 0
+            status = GenerationStatus.FINISHED
+            try:
+                await run.publish(
+                    StreamingBlock(
+                        chunk=None, event="user_message_insert", thread_id=thread_id
+                    ).model_dump_json(by_alias=True)
+                    + "\n"
+                )
+
+                async for kind, text in llama.chat_completion_stream(
+                    history, enable_thinking=enable_thinking
+                ):
+                    if first_token_at is None:
+                        first_token_at = loop.time()
+                        Logger.info(
+                            "First token thread=%s run=%s after %.3fs",
+                            thread_id,
+                            run.journal_id,
+                            first_token_at - started_at,
+                        )
+
+                    if kind == "thinking":
+                        event = "new_thinking_chunk"
+                        run.thinking += text
+                        thinking_chunks += 1
+                    else:
+                        event = "new_chunk"
+                        run.response += text
+                        content_chunks += 1
+
+                    await run.publish(
+                        StreamingBlock(chunk=text, event=event).model_dump_json(by_alias=True)
+                        + "\n"
+                    )
+                    await flush_partial()
+
+                Logger.debug("Generation completed for thread_id: %s", thread_id)
+
+                await flush_partial(force=True)
+                await emit_terminal()
+            except asyncio.CancelledError:
+                status = GenerationStatus.STOPPED
+                await flush_partial(force=True)
+                await emit_terminal()
+                Logger.warning(
+                    "Generation cancelled thread=%s run=%s after %.3fs (%d content / %d "
+                    "thinking chunks, response=%d chars)",
+                    thread_id,
+                    run.journal_id,
+                    loop.time() - started_at,
+                    content_chunks,
+                    thinking_chunks,
+                    len(run.response),
+                )
+            except Exception:
+                status = GenerationStatus.FAILED
+                Logger.exception(
+                    "Generation failed thread=%s run=%s after %.3fs (%d content / %d "
+                    "thinking chunks, response=%d chars, thinking=%d chars)",
+                    thread_id,
+                    run.journal_id,
+                    loop.time() - started_at,
+                    content_chunks,
+                    thinking_chunks,
+                    len(run.response),
+                    len(run.thinking),
+                )
+                await flush_partial(force=True)
+                await emit_terminal("Generation failed. Please try again.")
+            finally:
                 try:
                     await finalize_journal(status)
                 except Exception:
