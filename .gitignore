@@ -227,3 +227,6 @@ __marimo__/
 
 # Agent pipeline working drafts (never committed)
 .pipeline/
+
+# === opencode local planning docs ===
+.opencode/plans/
