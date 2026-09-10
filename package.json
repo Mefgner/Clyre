@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
+    "test:frontend": "node --test tests_frontend/reconnect.test.ts tests_frontend/attachments.test.ts",
+    "test:component": "vitest run",
     "lint": "eslint . --fix"
   },
   "dependencies": {
@@ -28,9 +30,11 @@
     "@tsconfig/node22": "^22.0.0",
     "@types/node": "^22.9.0",
     "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/test-utils": "^2.5.0",
     "@vue/tsconfig": "^0.8.1",
     "eslint": "^9.35.0",
     "eslint-config-vuetify": "^4.2.0",
+    "jsdom": "^30.0.1",
     "npm-run-all2": "^8.0.4",
     "sass-embedded": "^1.92.1",
     "typescript": "~5.9.2",
@@ -39,6 +43,7 @@
     "unplugin-vue-router": "^0.15.0",
     "vite": "^7.1.5",
     "vite-plugin-vuetify": "^2.1.2",
+    "vitest": "^5.0.0",
     "vue-tsc": "^3.0.7"
   }
 }
