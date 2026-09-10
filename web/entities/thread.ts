@@ -1,6 +1,6 @@
 export type MessageRole = 'user' | 'assistant' | 'thinking' | 'system'
 
-export type StreamingEvents = 'user_message_insert' | 'new_thinking_chunk' | 'new_chunk' | 'assistant_message_insert' | 'done' // | 'error'
+export type StreamingEvents = 'user_message_insert' | 'new_thinking_chunk' | 'new_chunk' | 'assistant_message_insert' | 'error' | 'done'
 
 export interface ThreadMetadata {
   id: string

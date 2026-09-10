@@ -22,9 +22,49 @@ import { defineStore } from 'pinia'
 import { reactive, ref } from 'vue'
 import { type ChatStreamConnection, threadRepo } from '@/repos/thread.ts'
 import { logger } from '@/utils/logger.ts'
+import { shouldReconnectStream, STREAM_RECONNECT_DELAYS_MS } from '@/utils/reconnect.ts'
 import { readNDJSONStream } from '@/utils/stream.ts'
 
 const GENERATION_POLL_INTERVAL_MS = 1000
+
+export class ChatGenerationError extends Error {
+  constructor (message: string, readonly messageAccepted: boolean) {
+    super(message)
+    this.name = 'ChatGenerationError'
+  }
+}
+
+class ChatStreamHttpError extends Error {
+  constructor (readonly status: number, readonly detail: string | null = null) {
+    super(detail || `Chat stream request failed with status ${status}`)
+    this.name = 'ChatStreamHttpError'
+  }
+}
+
+async function readErrorDetail (response: Response): Promise<string | null> {
+  try {
+    const data = await response.clone().json() as { detail?: unknown }
+    const detail = data?.detail
+    if (typeof detail === 'string') {
+      return detail
+    }
+    if (detail && typeof detail === 'object') {
+      const message = (detail as { message?: unknown }).message
+      if (typeof message === 'string') {
+        return message
+      }
+      const code = (detail as { code?: unknown }).code
+      if (typeof code === 'string' && code.length > 0) {
+        return code
+      }
+    }
+  } catch {
+    // Non-JSON error body — fall back to generic messaging below.
+  }
+  return null
+}
+
+const wait = (delayMs: number) => new Promise(resolve => setTimeout(resolve, delayMs))
 
 export const useThreadStore = defineStore('thread', () => {
   const threadsMeta = ref<ThreadMetadata[]>([])
@@ -68,9 +108,9 @@ export const useThreadStore = defineStore('thread', () => {
     threadsMeta.value = []
   }
 
-  // TODO(m2-chat-resume): replace polling with offset-based reconnect via
-  // POST /api/chat/stream once the backend exposes a subscribe-without-send
-  // endpoint; polling only survives page refreshes mid-generation.
+  // Polling remains the fallback for a page opened while another client owns
+  // the stream. A stream interrupted in this client resumes through HTTP
+  // offset replay in getAssistantMessagePipeline.
   const stopGenerationPolling = (reason?: string) => {
     if (pollTimer !== null) {
       clearInterval(pollTimer)
@@ -172,7 +212,7 @@ export const useThreadStore = defineStore('thread', () => {
     }
   }
 
-  const getAssistantMessagePipeline = async function* (prompt: string, enableThinking = false) {
+  const getAssistantMessagePipeline = async function* (prompt: string, enableThinking = false, fileIds: string[] = []) {
     if (isGenerating.value) {
       return
     }
@@ -185,11 +225,11 @@ export const useThreadStore = defineStore('thread', () => {
     let contentChunks = 0
     let thinkingChunks = 0
 
-    const connection: ChatStreamConnection = threadRepo.openChatStream({
+    let connection: ChatStreamConnection = threadRepo.openChatStream({
       threadId: requestThreadId,
       message: prompt,
       enableThinking,
-      offset: 0,
+      fileIds,
     })
     streamAbort = connection.abort
 
@@ -198,82 +238,194 @@ export const useThreadStore = defineStore('thread', () => {
       offset: 0,
       messageLength: prompt.length,
       enableThinking,
+      fileCount: fileIds.length,
     })
 
     let streamThreadId: string | null = requestThreadId
+    // Thread id confirmed by the server for *this* start. Reconnecting is only
+    // legal once the POST was accepted: the request thread id alone is not
+    // proof (a rejected start on an existing thread would otherwise replay the
+    // previous buffered run and pass its answer off as the new one).
+    let confirmedThreadId: string | null = null
     let consumedEvents = 0
+    let reconnectAttempt = 0
+    let sawDone = false
+    let serverError: string | null = null
+    let resumePolling = false
+    // True once the server acknowledged the message (first durable event).
+    // HTTP failures before that point never persisted anything: the caller
+    // must drop the optimistic bubble and keep the composer text + files.
+    let accepted = false
 
     const isActiveStream = () => !streamThreadId || currentThread.value.id === streamThreadId
 
-    try {
-      const response = await connection.response
-      if (!response.ok || !response.body) {
-        logger.error('stream_http_error', { status: response.status, threadId: requestThreadId })
-        throw new Error(`Chat stream request failed with status ${response.status}`)
+    const syncPersistedThread = async () => {
+      if (!streamThreadId || !isActiveStream()) {
+        return
+      }
+      try {
+        const response = await threadRepo.getThreadHistory(streamThreadId)
+        currentThread.value = response.data
+        resumePolling = response.data.isGenerating === true
+      } catch (error) {
+        logger.error('stream_fallback_sync_failed', {
+          threadId: streamThreadId,
+          error: String(error),
+        })
+      }
+    }
+
+    const handleStreamPayload = async (payload: ThreadStreamingPayload): Promise<boolean> => {
+      consumedEvents += 1
+
+      if (payload.threadId && streamThreadId && payload.threadId !== streamThreadId) {
+        return false
+      }
+      if (payload.threadId) {
+        streamThreadId = payload.threadId
+        confirmedThreadId = payload.threadId
+        activeStreamThreadId.value = payload.threadId
+        if (!currentThread.value.id || currentThread.value.id === payload.threadId) {
+          currentThread.value.id = payload.threadId
+        }
       }
 
-      for await (const payload of readNDJSONStream<ThreadStreamingPayload>(response.body)) {
-        consumedEvents += 1
-
-        if (payload.threadId && streamThreadId && payload.threadId !== streamThreadId) {
-          continue
+      switch (payload.event) {
+        case 'user_message_insert': {
+          accepted = true
+          break
         }
-        if (payload.threadId) {
-          streamThreadId = payload.threadId
-          activeStreamThreadId.value = payload.threadId
-          if (!currentThread.value.id || currentThread.value.id === payload.threadId) {
-            currentThread.value.id = payload.threadId
-          }
+        case 'assistant_message_insert': {
+          break
         }
 
-        switch (payload.event) {
-          case 'user_message_insert':
-          case 'assistant_message_insert': {
-            break
+        case 'new_thinking_chunk': {
+          if (firstTokenAt === null) {
+            firstTokenAt = performance.now()
+            logger.info('first_thinking_chunk', {
+              threadId: streamThreadId,
+              ms: Math.round(firstTokenAt - startedAt),
+            })
           }
-
-          case 'new_thinking_chunk': {
-            if (firstTokenAt === null) {
-              firstTokenAt = performance.now()
-              logger.info('first_thinking_chunk', { threadId: streamThreadId, ms: Math.round(firstTokenAt - startedAt) })
-            }
-            thinkingChunks += 1
-            if (payload.chunk && isActiveStream()) {
-              appendToAssistantMessage(payload.chunk, 'thinking')
-            }
-            break
+          thinkingChunks += 1
+          if (payload.chunk && isActiveStream()) {
+            appendToAssistantMessage(payload.chunk, 'thinking')
           }
-
-          case 'new_chunk': {
-            if (firstTokenAt === null) {
-              firstTokenAt = performance.now()
-              logger.info('first_content_chunk', { threadId: streamThreadId, ms: Math.round(firstTokenAt - startedAt) })
-            }
-            contentChunks += 1
-            if (payload.chunk && isActiveStream()) {
-              appendToAssistantMessage(payload.chunk, 'content')
-            }
-            break
-          }
-
-          case 'done': {
-            if (isActiveStream()) {
-              currentThread.value.updateTime = Date.now().toString()
-              try {
-                await getThreadsMeta()
-              } catch (error) {
-                logger.warn('threads_meta_refresh_failed', { threadId: streamThreadId, error: String(error) })
-              }
-            }
-            break
-          }
-
-          default: {
-            logger.warn('unknown_stream_event', { event: payload.event })
-          }
+          break
         }
 
-        yield payload
+        case 'new_chunk': {
+          if (firstTokenAt === null) {
+            firstTokenAt = performance.now()
+            logger.info('first_content_chunk', {
+              threadId: streamThreadId,
+              ms: Math.round(firstTokenAt - startedAt),
+            })
+          }
+          contentChunks += 1
+          if (payload.chunk && isActiveStream()) {
+            appendToAssistantMessage(payload.chunk, 'content')
+          }
+          break
+        }
+
+        case 'error': {
+          serverError = payload.chunk ?? 'Generation failed. Please try again.'
+          break
+        }
+
+        case 'done': {
+          sawDone = true
+          if (isActiveStream()) {
+            currentThread.value.updateTime = Date.now().toString()
+            try {
+              await getThreadsMeta()
+            } catch (error) {
+              logger.warn('threads_meta_refresh_failed', {
+                threadId: streamThreadId,
+                error: String(error),
+              })
+            }
+          }
+          break
+        }
+
+        default: {
+          logger.warn('unknown_stream_event', { event: payload.event })
+        }
+      }
+      return true
+    }
+
+    try {
+      while (!sawDone) {
+        try {
+          const response = await connection.response
+          const responseThreadId = response.headers.get('X-Clyre-Thread-Id')
+          if (responseThreadId) {
+            streamThreadId = responseThreadId
+            activeStreamThreadId.value = responseThreadId
+            if (!currentThread.value.id || currentThread.value.id === responseThreadId) {
+              currentThread.value.id = responseThreadId
+            }
+          }
+          if (!response.ok || !response.body) {
+            throw new ChatStreamHttpError(response.status, await readErrorDetail(response))
+          }
+          // Only an accepted POST may be resumed; 4xx/5xx rejections (budget
+          // preflight, conflicts) persisted nothing.
+          confirmedThreadId = responseThreadId ?? streamThreadId
+
+          for await (const payload of readNDJSONStream<ThreadStreamingPayload>(response.body)) {
+            if (await handleStreamPayload(payload)) {
+              yield payload
+            }
+          }
+
+          if (serverError) {
+            throw new ChatGenerationError(serverError, true)
+          }
+          if (!sawDone) {
+            throw new Error('Chat stream ended before its terminal event')
+          }
+        } catch (error) {
+          const aborted = error instanceof DOMException && error.name === 'AbortError'
+          if (aborted) {
+            throw error
+          }
+          if (error instanceof ChatGenerationError) {
+            await syncPersistedThread()
+            throw error
+          }
+
+          const canReconnect = shouldReconnectStream({
+            attempt: reconnectAttempt,
+            hasThreadId: Boolean(confirmedThreadId),
+            httpStatus: error instanceof ChatStreamHttpError ? error.status : undefined,
+          })
+          if (!canReconnect) {
+            await syncPersistedThread()
+            const httpDetail = error instanceof ChatStreamHttpError ? error.detail : null
+            const message = httpDetail
+              ?? (error instanceof ChatStreamHttpError && error.status === 410
+                ? 'Generation stream expired. The saved response was reloaded.'
+                : 'Connection to the generation was lost. The saved response was reloaded.')
+            throw new ChatGenerationError(message, accepted)
+          }
+
+          const delayMs = STREAM_RECONNECT_DELAYS_MS[reconnectAttempt]!
+          reconnectAttempt += 1
+          logger.warn('stream_reconnect_scheduled', {
+            threadId: streamThreadId,
+            offset: consumedEvents,
+            attempt: reconnectAttempt,
+            delayMs,
+            error: String(error),
+          })
+          await wait(delayMs)
+          connection = threadRepo.attachChatStream(streamThreadId!, consumedEvents)
+          streamAbort = connection.abort
+        }
       }
 
       logger.info('stream_completed', {
@@ -300,6 +452,9 @@ export const useThreadStore = defineStore('thread', () => {
       streamAbort = null
       activeStreamThreadId.value = null
       isGenerating.value = false
+      if (resumePolling) {
+        startGenerationPolling()
+      }
     }
   }
 

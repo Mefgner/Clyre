@@ -1,8 +1,10 @@
 <script setup lang="ts">
   import { computed, onUnmounted, useTemplateRef, watch } from 'vue'
+  import { useAttachmentsStore } from '@/stores/attachments.ts'
   import { useThreadStore } from '@/stores/thread.ts'
 
   const threadStore = useThreadStore()
+  const attachmentsStore = useAttachmentsStore()
   const props = defineProps<{ chatId: string }>()
   const chatHistoryFooter = useTemplateRef<HTMLDivElement>('chatHistoryFooter')
 
@@ -14,10 +16,14 @@
       || threadStore.currentThread.isGenerating === true))
 
   watch([() => threadStore.threadsMeta, () => props.chatId], async () => {
+    if (props.chatId === 'new') return
     const threadMeta = threadStore.threadsMeta.find(thread => thread.id === props.chatId)
     if (!threadMeta) return
     if (threadStore.currentThread.id === threadMeta.id) return
-    threadStore.setCurrentThread(threadMeta)
+    await threadStore.setCurrentThread(threadMeta)
+    // Reopening a thread shows its linked attachments; failures surface
+    // inline in the composer, never as a blocking error.
+    await attachmentsStore.loadLinked(threadMeta.id).catch(() => {})
   }, { immediate: true })
 
   watch(() => threadStore.currentThread.messages, () => {

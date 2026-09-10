@@ -145,7 +145,14 @@
           class="position-absolute bottom-0 w-100 px-4 pb-4"
         >
           <v-fade-transition>
-            <prompt-bar :is-generating="threadStore.isGenerating" @send-message="generateAnswer" @stop="threadStore.stopGeneration" />
+            <prompt-bar
+              ref="promptBarRef"
+              :is-generating="threadStore.isGenerating"
+              :starting="isStarting"
+              :thread-key="composerKey"
+              @send-message="generateAnswer"
+              @stop="threadStore.stopGeneration"
+            />
           </v-fade-transition>
         </v-col>
       </v-row>
@@ -162,11 +169,13 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+  import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
   import { useRouter } from 'vue-router'
   import { useDisplay } from 'vuetify'
+  import { attachmentKey, hasBlockingAttachments, pendingReadyIds } from '@/entities/file.ts'
+  import { useAttachmentsStore } from '@/stores/attachments.ts'
   import { useAuthStore } from '@/stores/auth.ts'
-  import { useThreadStore } from '@/stores/thread.ts'
+  import { ChatGenerationError, useThreadStore } from '@/stores/thread.ts'
   import { useUiStore } from '@/stores/ui.ts'
   import { useUserStore } from '@/stores/user.ts'
 
@@ -178,7 +187,14 @@
   const authStore = useAuthStore()
   const userStore = useUserStore()
   const threadStore = useThreadStore()
+  const attachmentsStore = useAttachmentsStore()
   const uiStore = useUiStore()
+
+  const composerKey = computed(() => attachmentKey(threadStore.currentThread.id || null))
+  const isStarting = ref(false)
+  const promptBarRef = useTemplateRef<{
+    clearComposer: (sentText?: string, key?: string) => void
+  }>('promptBarRef')
 
   const smartThreadTitle = computed(() => {
     const thread = threadStore.currentThread
@@ -204,7 +220,7 @@
       if (!authStore.isLoggedIn) {
         return
       }
-      threadStore.getThreadsMeta()
+      threadStore.getThreadsMeta().catch(() => {})
     }, 60_000)
   })
 
@@ -234,20 +250,44 @@
   const isSendErrorShown = ref(false)
 
   async function generateAnswer (prompt: string, enableThinking = false) {
-    if (threadStore.isGenerating) return
+    if (threadStore.isGenerating || isStarting.value) return
 
     const accessToken = authStore.accessToken
     if (!accessToken) return
+
+    // Bind uploads and errors to the originating composer: a mid-send thread
+    // switch must not move chips into another conversation.
+    const sendKey = composerKey.value
+    const attachState = attachmentsStore.stateFor(sendKey)
+    if (hasBlockingAttachments(attachState)) {
+      sendError.value = 'Finish or remove failed uploads before sending.'
+      isSendErrorShown.value = true
+      return
+    }
+    const fileIds = pendingReadyIds(attachState)
 
     threadStore.pushUserMessage(prompt)
     // Capture the target thread object: a mid-send thread switch replaces
     // currentThread wholesale, and the rollback below must not touch the
     // unrelated thread the user switched to.
     const sentThread = threadStore.currentThread
+    isStarting.value = true
 
     try {
-      for await (const payload of threadStore.getAssistantMessagePipeline(prompt, enableThinking)) {
+      for await (const payload of threadStore.getAssistantMessagePipeline(prompt, enableThinking, fileIds)) {
         if (payload.event === 'user_message_insert') {
+          // The server accepted the message: clear only that sent text (and
+          // only in its own composer key) — a late confirmation must not wipe
+          // an edited draft or another thread's draft.
+          promptBarRef.value?.clearComposer(prompt, sendKey)
+          if (sendKey === 'new' && payload.threadId) {
+            attachmentsStore.adoptDraft(payload.threadId)
+            attachmentsStore.clearPending(payload.threadId)
+            await attachmentsStore.loadLinked(payload.threadId).catch(() => {})
+          } else if (sendKey !== 'new') {
+            attachmentsStore.clearPending(sendKey)
+            await attachmentsStore.loadLinked(sendKey).catch(() => {})
+          }
           await threadStore.getThreadsMeta()
 
           const nextId = threadStore.currentThread?.id
@@ -263,15 +303,22 @@
       if (error instanceof DOMException && error.name === 'AbortError') return
 
       console.error('Failed to generate answer', error)
-      // The server never accepted the message: drop the dangling optimistic
-      // bubble instead of leaving an unanswered message in the thread.
-      const messages = sentThread.messages
-      const lastMessage = messages.at(-1)
-      if (lastMessage?.role === 'user' && lastMessage.content === prompt) {
-        messages.pop()
+      if (!(error instanceof ChatGenerationError && error.messageAccepted)) {
+        // The server never accepted the message: drop the dangling optimistic
+        // bubble instead of leaving an unanswered message in the thread.
+        // Composer text and selected files are kept for a retry.
+        const messages = sentThread.messages
+        const lastMessage = messages.at(-1)
+        if (lastMessage?.role === 'user' && lastMessage.content === prompt) {
+          messages.pop()
+        }
       }
-      sendError.value = 'Failed to send the message — please try again.'
+      sendError.value = error instanceof ChatGenerationError
+        ? error.message
+        : 'Failed to send the message — please try again.'
       isSendErrorShown.value = true
+    } finally {
+      isStarting.value = false
     }
   }
 </script>
