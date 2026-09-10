@@ -17,8 +17,12 @@ A milestone is a capability check: can Clyre do X, end to end, on local hardware
 Checked in order; each maps to the phase that makes it possible.
 
 - [x] **M1 — Boot.** On a clean machine, both `llama-server` processes start (chat + embedding) and the web app (built frontend served by FastAPI, SPA fallback) serves an authenticated chat. *(Phase 1)*
-- [ ] **M2 — Fast chat.** A question is answered in `fast` mode with streaming, from a local model. *(Phase 2)*
-- [ ] **M3 — Attached files.** A user uploads a file, attaches it to a thread, and the answer uses its full content at a stable position. *(Phase 2)*
+- [x] **M2 — Fast chat.** A question is answered through the single streaming chat path, from a local model. *(Phase 2)*
+- [x] **M3 — Attached files.** A user uploads a file, attaches it to a thread, and the answer uses its full content at a stable position. *(Phase 2)*
+  - Accepted on local hardware in desktop test mode with Qwen3.5-4B Q3:
+    non-thinking generation used the uploaded file in the first answer and
+    continued the conversation with the file remaining in thread context.
+    Automated backend, frontend, and regular live E2E suites pass.
 - [ ] **M4 — Compaction.** A thread overflowing the context window is summarized (oldest → summary, recent verbatim) and still answers; the user is notified. *(Phase 2)*
 - [ ] **M5 — Routing.** The fast-mode router classifies a query into plain chat or a registered read-only capability; the capability pipeline runs end to end and the answer uses its result. *(Phase 2)*
 - [ ] **M6 — Projects.** A project groups threads and explicitly linked files can be selected from a listing. *(Phase 3)*
@@ -104,7 +108,7 @@ Table stakes for the thesis evaluation. Without it the architecture is not defen
 
 ### 2.1 Retrieval functions (`api/services/retrieval.py`)
 Plain async functions, callable by both the chat path and the orchestrator.
-- [x] `fetch_file(file_id) -> str`
+- [x] `fetch_file(file_id) -> str` (M3: strict shared `extract_text`, not lossy decode)
 - [x] `list_project_files(project_id) -> list[FileMeta]`
 - [x] `search_project(query, user_id, project_ids?, k) -> list[ChunkResult]` (validates owned scopes, delegates to `VectorRepository`)
 - [x] `hydrate_chunks(results) -> list[ChunkText]` — `ChunkResult` carries offsets, not text
@@ -113,6 +117,9 @@ Plain async functions, callable by both the chat path and the orchestrator.
 - [x] `FileStore` protocol: `save` / `read` / `delete`
 - [x] `LocalFileStore` → `./data/files/<user_id>/<file_id>`
 - [x] Resolved via `get_file_store()` (module-level singleton, same shape as the other pipelines)
+- [x] Hardened (M3): component allowlist + resolved containment under the store root and
+  the user dir on every op; never interpolates the original filename; atomic
+  temp-file + `os.replace` writes with temp cleanup on failure
 
 ### 2.3 File upload + linking endpoints (`api/routes/files/`)
 - [x] `POST /api/files/upload` — save file (`project_id = NULL` by default)
@@ -122,6 +129,14 @@ Plain async functions, callable by both the chat path and the orchestrator.
 - [x] `POST /api/files/{file_id}/link/project/{project_id}`
 - [x] `crud/file.py` is implemented
 - [x] Add `python-multipart` (FastAPI `UploadFile` requires it)
+- [x] Safe upload (M3): chunked read capped by `MAX_UPLOAD_BYTES` (10 MiB, → 413),
+  MIME normalized without parameters, text-only allowlist (→ 415), strict UTF-8
+  with BOM / NUL rejection (→ 422), empty files allowed, checks before any
+  metadata/blob write, compensating blob delete on transaction failure
+- [x] Thread attachments (M3): `GET /api/thread/{thread_id}/files`,
+  `DELETE /api/files/{file_id}/link/thread/{thread_id}` (idempotent 204);
+  `DELETE /api/files/{file_id}` deletes metadata first and the blob after a
+  successful commit (cleanup failures logged, never strand a live row)
 
 ### 2.4 Summarization + chat compaction
 - [ ] `api/pipelines/summarize.py`: `summarize(text, target_tokens) -> str`; token counts via `/tokenize`
@@ -130,8 +145,20 @@ Plain async functions, callable by both the chat path and the orchestrator.
 - [ ] Emit `context_compacted` so the frontend notifies the user
 
 ### 2.5 L0 — fast path with attached files
-- [ ] In `ChattingService.stream_response`: build context from history (compacted) + thread/project-attached files, injected at a **stable position** (never mid-history)
-- [ ] No automatic RAG injection; files enter context only when attached or tool-fetched
+- [x] In `ChattingService.stream_response`: build context from history (compacted) + **thread**-attached files, injected at a **stable position** (never mid-history) — M3: pure `build_chat_context` (one system message with a JSON `attached_files` block marked untrusted, history, current exactly once), Python-side `(name, id)` ordering, strict `extract_text` for every attached byte, never `head_value`
+- [ ] Project-attached files in context (waits for the M6 project UI; project membership alone adds nothing today)
+- [x] No automatic RAG injection; files enter context only when attached or tool-fetched
+- [x] Strict token budget (M3): full prompt rendered through the server chat template (`/apply-template` with the same thinking params as generation), counted via `/tokenize`, checked against the real slot size (`/props`); admit only `prompt_tokens + CHAT_MAX_OUTPUT_TOKENS (1024) <= slot`, same reserve sent as `max_tokens`; overflow → 422 `context_limit_exceeded`, unavailable preflight → 503 (never approximate)
+- [x] Atomic generation start (M3): `fileIds` in the chat request; prepare (ownership → union ≤ 16 → sequential read → context → budget → title) before any write; one commit for thread/links/user message/journal/reserve; prepare failure creates nothing and calls neither completion nor title; retry prepares before deleting the previous answer; legacy `/response` wraps the same start path
+
+### Post-M3 file relevance window (agreed direction, not implemented)
+- Attaching a file, or explicitly invoking it, opens a window of 5 user requests.
+- Automatic relevance checking ahead of the router does not extend the window.
+- After the window the file is used only on explicit user reference.
+- A relevant file is passed whole when it fits; otherwise a separate sequential
+  pipeline processes its chunks and returns results with sources.
+- Bounding/merging of intermediate results is defined during that capability's
+  planning together with M5.
 
 ### 2.6 Fast-mode routing (replaces the inline-tool-call design)
 Full contract: **`docs/plans/tool-contract.md`** — categories, manifest, skeleton, ranking,
@@ -140,6 +167,7 @@ durability, router mechanics. The model never sees raw tools; selection is deter
 - [ ] Router: one constrained chat-model classification per message (recent history + registry names) → `chat` | `<plugin>`; multi-intent → plugin priority + honest disclaimer
 - [ ] Thin tools (`fetch_file`, `list_project_files`, `search_project`) stay code-only building blocks for handlers
 - [ ] First thick plugin proves the skeleton (file-oriented capability first; `web_search` follows once its data-source backend is chosen)
+- [ ] Runtime-owned file mutation gateway enforces approved `lock → durable intent → atomic apply → commit → unlock`, hash-based conflict detection/recovery, and forbids direct writes from `W|RW` handlers
 - [ ] Re-entry refinement: parse merges delta over snapshot params; param diff → re-synthesize vs re-collect
 
 ### 2.7 Resilient generation
@@ -148,14 +176,14 @@ thread owns the inference task; clients are subscribers with an offset.
 - [x] `api/services/generation.py`: `GenerationRun` (asyncio task, event buffer,
   subscriber queues, status `running|finished|stopped|failed|interrupted`); module-level
   registry `{thread_id: run}`; disconnect kills only the subscriber, never the task
-- [x] Stream endpoint replays buffered events from `offset=N` (exact-once), then goes live
-  (service level; HTTP re-attach pending — known-issues #17)
+- [x] `GET /api/chat/stream/{thread_id}?offset=N` replays buffered events from the
+  exact offset, then goes live without starting a second generation
 - [x] Durable call journal: `generation_run` table (id, thread_id, user_id, status,
   `side_effects`, timestamps); assistant message row reserved upfront, partial content
   flushed periodically (~1s), finalized at terminal state; startup sweep marks orphaned
   `running` rows `interrupted`; `is_generating` exposed in thread metadata
-- [x] **Retry policy** (fixed): live reconnect → true resume from offset
-  (reconnect semantics not yet reachable over HTTP — known-issues #17). Server crash →
+- [x] **Retry policy** (fixed): live reconnect → true resume from offset over HTTP.
+  Server crash →
   retry only while `side_effects=False` (fast chat has none by construction); once a W/RW
   effect has been recorded, retry is forbidden — keep the partial answer and continue the
   dialog on top. True retry-from-checkpoint arrives with Phase 5 approval gates
@@ -296,11 +324,10 @@ call profiles may vary prompts and generation parameters. Build only after L0/L1
 - [ ] `POST /api/agent/{run_id}/approve` | `/reject` → resume / fail
 - [ ] Frontend approval dialog
 
-### 5.6 Endpoints + router
+### 5.6 Endpoints
 - [ ] `POST /api/agent/run` → enqueue, return `run_id`
 - [ ] `GET /api/agent/{run_id}/stream` → SSE from in-memory pub/sub; coarse status from snapshot if not in RAM
 - [ ] `GET /api/agent/{run_id}` → status + final snapshot (reload/history)
-- [ ] `api/services/router.py` — fast-vs-plan classifier (constrained one-token output); mode `auto|fast|plan`. **MVP may ship a manual toggle and defer auto-classification.**
 - [ ] Frontend progress stepper driven by SSE
 
 ### 5.7 MCP (optional, if time permits)
@@ -341,7 +368,7 @@ Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): d
 - [ ] File management UI (upload, list, attach, index automatically in project)
 - [ ] Project sidebar
 - [ ] Agent progress stepper with approval dialog
-- [ ] Settings: inference/embedding URLs, model names, `ALLOW_FILE_SUMMARIZATION`, router mode
+- [ ] Settings: inference/embedding URLs, model names, `ALLOW_FILE_SUMMARIZATION`
 - [ ] Thinking toggle in the UI (backend support shipped with M2: `enableThinking` request flag, `new_thinking_chunk` NDJSON event, persisted `Message.thinking_value`; thinking is display-only — never re-sent in history per the Qwen3.5 model card)
 - [ ] PWA: manifest + service worker + icons (`vite-plugin-pwa`) — installable, standalone window, offline shell; works on `localhost` (desktop); on LAN it degrades to a browser tab without a self-signed cert
 

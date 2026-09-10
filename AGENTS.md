@@ -25,8 +25,8 @@ Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py
 - Frontend under `web/`: `components/` (auto-imported), `pages/`, `stores/` (Pinia), `repos/` (API clients per domain), `entities/`, `plugins/`, `router/`, `utils/`
 
 ## Response pipeline
-`POST /api/chat/stream` today; `mode: auto|fast|plan` request field is planned
-- **FAST (router):** every message → one constrained chat-model classification (recent history + registry names) → plain chat or a registered capability pipeline (`parse → execute → synthesize`). The model never sees raw tools. Streams **NDJSON**.
+`POST /api/chat/stream` is the single chat entry point; there is no public mode field
+- **FAST (router):** today every message goes directly to chat. M5 adds one constrained chat-model classification (recent history + registry names) inside the same path → plain chat or a registered capability pipeline (`parse → execute → synthesize`). The model never sees raw tools. Streams **NDJSON**.
 - **PLAN** *(deferred, post-thesis)*: planner → sequential tool steps → synthesizer. Checkpointed at approval/completion. Progress via **SSE**.
 
 Design details: `docs/plans/tool-contract.md`, rationale: ADR-draft 11 (`docs/adr/drafts/11-deterministic-routing.md`).

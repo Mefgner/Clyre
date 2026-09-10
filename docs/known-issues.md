@@ -140,9 +140,8 @@ distinguish them. Align on one repo/quant or fold the file name into the
 fingerprint.
 
 ### 24. Generation wire-contract gaps — `services/chatting.py`, `web/entities/thread.ts`
-- No error/status terminal event: FAILED runs end with plain `done`
-  (`StreamingBlock` has no error kind; entities keep `'error'` commented
-  out), so failures render as empty successes.
+- [x] FAILED runs now emit a safe `error` event before `done`; the frontend
+  preserves accepted messages, reloads persisted state, and surfaces the failure.
 - `start_generation` commits the user message before `_launch`: a
   journal/reserve failure 500s with the message persisted — resending
   duplicates it.
@@ -214,13 +213,11 @@ chunks). There is no `max_tokens`/thinking-budget guard on the wire. Consider
 capping generation length per request and/or surfacing empty-content runs as
 failed.
 
-### 17. Offset re-subscribe unreachable over HTTP — `routes/chatting/views.py`
-`POST /api/chat/stream` always calls `start_generation`, so a client that
-disconnects mid-stream cannot re-attach to the active run: the second request
-hits `GenerationConflict` (409) and would even duplicate the user message.
-The `offset` replay of `GenerationRun.subscribe` is therefore only reachable at
-the service level today (covered by `tests_e2e/test_generation_pubsub.py`). A
-dedicated attach/re-subscribe endpoint is needed for true reconnect semantics.
+### 17. [x] Offset re-subscribe reachable over HTTP — `routes/chatting/views.py`
+`GET /api/chat/stream/{thread_id}?offset=N` authenticates ownership and attaches
+to the buffered run without creating a message or generation. The POST response
+exposes `X-Clyre-Thread-Id`; the frontend retries from its consumed-event count
+on a bounded 0.5/1/2-second schedule and falls back to persisted thread state.
 
 ### 25. [x] PLAN §6.3 claims undelivered work — `PLAN.md:320`
 Checked desktop-packaging item describes a PyInstaller spec, generated and
@@ -240,9 +237,9 @@ durations, `VECTOR_DB_URL`, `NORMALIZE_VECTORS`, `CHUNK_*`); empty
 No healthchecks and 0.0.0.0 port publishes (an unauthenticated llama pair and
 trivial-credential Postgres exposed LAN-wide during runs); conftest connects
 without a retry; registration depends on internet (DNS MX check → the
-gmail.com workaround); conflict tests burn slow LONG_PROMPT generations just
-to keep a run alive; `test_chat_stream.py:309` pokes httpx private
-`_transport`.
+gmail.com workaround); `test_chat_stream.py:309` pokes httpx private
+`_transport`. The former 500-word conflict/stop prompts were replaced by bounded
+20-token-list prompts with thinking explicitly disabled.
 
 ### 28. False-confidence unit tests — `tests/test_chat_stream.py`
 - `test_disconnect_does_not_stop_generation` is vacuous: ASGITransport

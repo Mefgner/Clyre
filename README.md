@@ -102,6 +102,11 @@ run in HF offline mode and reuse the production `clyre_llama_cache` volume, so
 nothing is downloaded at test time. Note: the main stack downloads the 9B chat
 model — the 4B the e2e stack needs must be fetched into the volume once:
 
+The executable chat e2e suite is deliberately non-reasoning-first: every test
+passes `enableThinking: false` and uses tightly bounded output prompts. The
+reasoning-mode scenario remains explicitly skipped until it is reliable on the
+low-quantization test model; thinking quality belongs to the later benchmark.
+
 ```bash
 # One-time warmup of the shared model cache (embedding model comes from the
 # main stack: `docker compose up embedding` once, or repeat with
