@@ -65,6 +65,9 @@ re-assembles what a plugin already assembled.
 | `access` | approval policy | `R` \| `W` \| `RW`; approval applies to write operations only (declaration now, enforcement with the deferred phase) |
 
 Token economy: the model-facing surface per capability is `name + description + produces`.
+`access: W|RW` is also an execution constraint: filesystem mutations must go through the
+runtime-owned mutation gateway described below. A plugin may prepare a change, but may not
+write a target file directly.
 
 ## ToolContext
 
@@ -79,6 +82,9 @@ The only doorway to ambient capabilities:
 - `history_slice` — recent compacted turns for `parse` and `synthesize`. Parse needs it so
   extracted entities are maximally descriptive on follow-ups; synthesize needs it because a
   plugin's answer must fit the conversation.
+- `file_mutations` — the only filesystem write gateway. It owns path validation, locking,
+  durable operation records, atomic replacement, verification, and crash reconciliation;
+  handlers never implement this protocol independently.
 
 ## Thick-tool skeleton (Template Method)
 
@@ -114,6 +120,45 @@ Rules baked into the skeleton:
 6. **Error lanes**: fatal errors (`ParseError`, fatal `ExecError`) → deterministic template,
    no LLM apology call; partial material (e.g. 2 of 5 pages fetched) → `synthesize`
    answers honestly over what exists and names the gaps.
+7. **Writes cross one gateway**: `W|RW` handlers return or submit a proposed mutation to
+   `ctx.file_mutations`; raw `open(..., "w")`, direct target writes, and plugin-specific lock
+   or recovery protocols are forbidden.
+
+## Filesystem write contract: lock → log → apply → unlock
+
+Approval happens before acquiring a lock. Once approved, every mutation of one target file
+uses this runtime-owned protocol:
+
+1. Resolve and validate the canonical target path inside the capability's allowed scope.
+2. Acquire the per-path runtime lock and an OS-level advisory lock where supported.
+3. Re-read the locked file and compare it with the `base_hash` used to prepare the delta. A
+   mismatch is a conflict: do not apply or silently rebase the stale delta.
+4. In one DB transaction, create a durable `file_operation` intent and mark the parent run
+   as having side effects. The record contains at least `{run_id, path, status, base_hash,
+   expected_hash, delta_or_staged_ref, timestamps}` and is committed before touching the
+   target.
+5. Materialize the complete new content into a temporary file in the target directory,
+   flush it, verify `expected_hash`, then atomically replace the target. Direct in-place
+   writes are forbidden.
+6. Verify the target hash and mark `file_operation.status = committed` in the DB.
+7. Release locks in `finally`. Process-owned locks must be released automatically on a
+   crash; stale lock files are not a source of truth.
+
+The DB and filesystem cannot share one transaction, so startup recovery reconciles every
+non-terminal operation by hashes:
+
+| Operation state | Current target hash | Recovery |
+|---|---|---|
+| `prepared|applying` | `base_hash` | apply has not committed; the operation may be resumed |
+| `prepared|applying` | `expected_hash` | apply succeeded; mark the operation `committed` |
+| `prepared|applying` | anything else | mark `conflicted`; never retry automatically |
+| `committed` | `expected_hash` | no action |
+| `committed` | anything else | the file changed later; record drift, never auto-rollback |
+
+The delta exists for review/audit; application uses complete staged content plus atomic
+replace. Text changes may store a unified diff, while binary or large results use a
+content-addressed staged blob. The first implementation permits one target file per write
+operation. Multi-file atomicity is not implied by the contract.
 
 ## Re-entry: refinement without a "wishes" field
 
@@ -168,6 +213,9 @@ Three levels were considered; L1 is chosen.
 - Recovery: crash in `execute` → restart from saved params (parse skipped); crash in
   `synthesize` → re-synthesize from stored material. Cheap because `parse` is first and
   stage outputs are budget-bounded.
+- Read-only `execute` stages may be repeated. A write stage is resumed only through its
+  `file_operation` reconciliation record; the whole pipeline must never be restarted after
+  its durable side-effect intent has been committed.
 - The same table (`pipeline_run`) is the seed of the deferred checkpoint model
   (`agent_run`) and carries citation metadata for the UI.
 - **Background generation is in scope**: generation runs as an asyncio task decoupled from
