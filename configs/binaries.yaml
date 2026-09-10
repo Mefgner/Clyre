@@ -6,18 +6,18 @@
   necessary: true
   # llama.cpp | sentence-transformers
   type: llama.cpp
-  filename: "llama-b6239-bin-win-cuda-12.4-x64.zip"
-  folder: "llama-b6239-bin-win-cuda-12.4-x64"
+  filename: "llama-b10809-bin-win-cuda-12.4-x64.zip"
+  folder: "llama-b10809-bin-win-cuda-12.4-x64"
   exe_name: "llama-server.exe"
-  url: "https://github.com/ggml-org/llama.cpp/releases/download/b6239/llama-b6239-bin-win-cuda-12.4-x64.zip"
-  sha256: "sha256:126b27ffeea00cddc7d2b7cf655ec5312cc7b23ca621444322ca97f2ac21bd6e"
+  url: "https://github.com/ggml-org/llama.cpp/releases/download/b10809/llama-b10809-bin-win-cuda-12.4-x64.zip"
+  sha256: "sha256:c77bfcd9ed8d91e8721a2d6a290b907fddd4fa5412a47b21c6fa1709116b85f9"
   dest_subdir: "binaries/"
   # WORKDIR / binaries / sha256 / folder / llama-server.exe (+ ggml-cuda.dll, ...)
 - platform: win32
   necessary: false
   type: llama.cpp
   filename: "cudart-llama-bin-win-cuda-12.4-x64.zip"
-  folder: "llama-b6239-bin-win-cuda-12.4-x64"
-  url: "https://github.com/ggml-org/llama.cpp/releases/download/b6595/cudart-llama-bin-win-cuda-12.4-x64.zip"
+  folder: "llama-b10809-bin-win-cuda-12.4-x64"
+  url: "https://github.com/ggml-org/llama.cpp/releases/download/b10809/cudart-llama-bin-win-cuda-12.4-x64.zip"
   sha256: "sha256:8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
   dest_subdir: "binaries/"
