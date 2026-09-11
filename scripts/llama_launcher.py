@@ -15,8 +15,8 @@ _LOCAL_HOSTS = {"", "localhost", "127.0.0.1", "0.0.0.0", "::1"}
 
 # Per-process stdout/stderr logs. Piping would freeze llama-server once the
 # OS pipe buffer fills (nobody drains it) — files are append-only and free
-# (known-issues #4). Same cwd-relative convention as ./data/files.
-_LOG_DIR = Path("data/logs")
+# (known-issues #4). Keep launcher logs with the desktop runtime data.
+_LOG_DIR = cfg.get_app_runtime_dir() / "data" / "logs"
 
 
 def _is_local_url(url: str | None) -> bool:

@@ -1,10 +1,11 @@
 import logging
-import os
 import sys
 from functools import lru_cache
 from pathlib import Path
 
 import yaml
+
+from shared.pyutils.base import get_app_runtime_dir
 
 Logger = logging.getLogger(__name__)
 
@@ -21,21 +22,6 @@ def dict_from_yaml(absolute_file_path: Path) -> dict:
         if not data:
             raise ValueError(f"Configuration is not set in {absolute_file_path.name}")
         return data
-
-
-@lru_cache(maxsize=1)
-def get_app_runtime_dir() -> Path:
-    platform_info = dict_from_yaml(get_app_root_dir() / "configs" / "platform.yaml")
-    if not platform_info:
-        raise ValueError("No platform information found in platform.yaml")
-
-    for p in platform_info:
-        if sys.platform == p["name"]:
-            workdir = Path(os.path.expanduser(os.path.expandvars(p["workdir"]))).resolve()
-            Logger.debug("platform path: %s", workdir)
-            workdir.mkdir(parents=True, exist_ok=True)
-            return workdir.resolve()
-    raise ValueError("Platform not found")
 
 
 @lru_cache(maxsize=1)

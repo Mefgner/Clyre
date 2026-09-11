@@ -1,6 +1,11 @@
 import os
 import tempfile
 import uuid
+from pathlib import Path
+
+_TEST_DATA_DIR = Path(__file__).resolve().parents[1] / "test-data"
+_TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
+_TEST_DB_PATH = (_TEST_DATA_DIR / "clyre_test.sqlite3").as_posix()
 
 # Force a small, isolated SQLite config before any api module imports Settings().
 os.environ["DB_ENGINE"] = "sqlite"
@@ -8,10 +13,8 @@ os.environ["VECTOR_DIM"] = "8"
 os.environ["NORMALIZE_VECTORS"] = "true"
 os.environ.setdefault("HASHING_SECRET", "test")
 os.environ.setdefault("ACCESS_TOKEN_SECRET", "test")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/clyre_test.sqlite3")
-# The app-level session manager resolves the URL against cwd; make sure the
-# directory exists before any test opens it.
-os.makedirs("data", exist_ok=True)
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TEST_DB_PATH}"
+os.environ["FILES_DIR"] = str(_TEST_DATA_DIR / "files")
 os.environ.setdefault("CHAT_BASE_URL", "http://localhost:6760")
 os.environ.setdefault("CHAT_MODEL", "Qwen3.5-9B")
 os.environ.setdefault("EMBEDDING_BASE_URL", "http://localhost:6761")

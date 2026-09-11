@@ -8,6 +8,7 @@ services:
       PORT: 6750
       DEBUG: False
       DATABASE_URL: postgresql+asyncpg://clyre:clyre_secret@db:5432/clyre
+      FILES_DIR: /app/data/files
       HASHING_SECRET: ${HASHING_SECRET:?}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?}
       ACCESS_TOKEN_DUR_MINUTES: 15

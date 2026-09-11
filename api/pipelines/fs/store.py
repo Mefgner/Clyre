@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Protocol
 
-from shared.pyutils.base import get_app_root_dir
+from shared.pyutils.base import get_app_runtime_dir
 from utils import env
 
 Logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class LocalFileStore:
 def _resolve_root() -> Path:
     root = Path(env.FILES_DIR)
     if not root.is_absolute():
-        root = get_app_root_dir() / root
+        root = get_app_runtime_dir() / root
     return root.resolve()
 
 

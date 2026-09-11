@@ -1,5 +1,6 @@
 # === Clyre local data (desktop DB, downloaded models) ===
 data/
+test-data/
 
 # === Node.js / Frontend ===
 node_modules/

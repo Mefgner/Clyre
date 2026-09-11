@@ -1,5 +1,5 @@
 - name: win32
-  workdir: "%APPDATA%/clyre"
+  workdir: "%LOCALAPPDATA%/clyre"
 - name: linux
   workdir: "~/.local/share/clyre"
 - name: darwin

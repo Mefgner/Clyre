@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     DESKTOP_DB_PATH: str = "./data/clyre.sqlite3"
     DATABASE_URL: str | None = None
 
-    # File storage (raw uploaded bytes; relative paths anchor to the app root)
+    # File storage (raw uploaded bytes; relative paths anchor to app runtime data)
     FILES_DIR: str = "./data/files"
 
     # Hashing / auth secrets must be present and non-empty. Compose already
