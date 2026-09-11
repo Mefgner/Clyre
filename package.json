@@ -11,6 +11,8 @@
     "type-check": "vue-tsc --build --force",
     "test:frontend": "node --test tests_frontend/reconnect.test.ts tests_frontend/attachments.test.ts",
     "test:component": "vitest run",
+    "e2e": "poetry run python scripts/run_e2e.py",
+    "e2e:gpu": "poetry run python scripts/run_e2e.py --gpu",
     "lint": "eslint . --fix"
   },
   "dependencies": {

@@ -21,9 +21,15 @@ services:
       LLAMA_ARG_N_GPU_LAYERS: ${E2E_N_GPU_LAYERS:-0}
       LLAMA_ARG_FLASH_ATTN: "off"
     ports:
-      - "6760:6760"
+      - "127.0.0.1:6760:6760"
     volumes:
       - llama_cache:/root/.cache
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6760/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 120
+      start_period: 10s
 
   embedding:
     image: ${E2E_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
@@ -41,9 +47,15 @@ services:
       LLAMA_ARG_N_GPU_LAYERS: ${E2E_N_GPU_LAYERS:-0}
       LLAMA_ARG_FLASH_ATTN: "off"
     ports:
-      - "6761:6761"
+      - "127.0.0.1:6761:6761"
     volumes:
       - llama_cache:/root/.cache
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6761/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 120
+      start_period: 10s
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -52,9 +64,14 @@ services:
       POSTGRES_PASSWORD: clyre_e2e
       POSTGRES_DB: clyre_e2e
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"
     volumes:
       - clyre_e2e_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clyre_e2e -d clyre_e2e"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
 
 volumes:
   clyre_e2e_pgdata:

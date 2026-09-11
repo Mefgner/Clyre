@@ -84,12 +84,14 @@ Open http://localhost:6750.
 
 ## Development commands
 
-| Task            | Command                         |
-| --------------- | ------------------------------- |
-| Backend tests   | `poetry run pytest`             |
-| Lint            | `poetry run ruff check .`       |
-| Frontend check  | `npm run type-check`            |
-| Frontend build  | `npm run build`                 |
+| Task            | Command                           |
+| --------------- | --------------------------------- |
+| Backend tests   | `poetry run pytest`               |
+| Lint            | `poetry run ruff check .`         |
+| Frontend check  | `npm run type-check`              |
+| Frontend build  | `npm run build`                   |
+| E2E (CPU)       | `npm run e2e`                     |
+| E2E (GPU)       | `npm run e2e:gpu`                 |
 | Migrations      | `poetry run alembic upgrade head` |
 | New migration   | `poetry run alembic revision --autogenerate -m "<msg>"` |
 
@@ -118,19 +120,22 @@ curl --retry 60 --retry-delay 3 --retry-connrefused -fsS http://127.0.0.1:6799/h
 docker rm -f clyre-e2e-warmup
 ```
 
-Both stacks publish ports 6760/6761 — stop one before starting the other.
+Both stacks publish ports 6760/6761 on the host loopback interface, so stop the
+main stack before starting the e2e stack.
 
 ```bash
-docker compose -f docker-compose.e2e.yml up -d          # CPU llama servers
-docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.gpu.yml up -d  # GPU
-poetry run pytest tests_e2e -m e2e
+npm run e2e       # CPU llama servers
+npm run e2e:gpu   # CUDA overlay
 ```
+
+The runner starts Compose with health/readiness checks, runs the suite on the
+host, and tears the stack down even when startup or tests fail. Pass additional
+pytest arguments after `--`, for example `npm run e2e -- -k file_lifecycle`.
 
 Overrides (optional): `CLYRE_E2E_DATABASE_URL`, `CLYRE_E2E_CHAT_URL`,
 `CLYRE_E2E_EMBEDDING_URL`, `CLYRE_E2E_EMBEDDING_MODEL`, `E2E_LLAMA_IMAGE`
-and `E2E_N_GPU_LAYERS` (GPU offload for both llama servers). Tear down with
-`docker compose -f docker-compose.e2e.yml down` (the model cache lives in the
-production stack's `clyre_llama_cache` volume and is kept).
+and `E2E_N_GPU_LAYERS` (GPU offload for both llama servers). The model cache lives
+in the production stack's `clyre_llama_cache` volume and is kept during teardown.
 
 ## Configuration
 

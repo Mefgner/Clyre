@@ -1,7 +1,7 @@
 """Live e2e fixtures: the in-process app against dockerized Postgres + llama.cpp.
 
-Bring the stack up first (see README "Running e2e tests"):
-    docker compose -f docker-compose.e2e.yml up -d
+Use the repository runner so service readiness and teardown are handled:
+    npm run e2e
 
 Environment must be finalised before anything imports db/app — the database
 engine is built as an import side effect. Real environment variables win over

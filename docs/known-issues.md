@@ -233,6 +233,9 @@ durations, `VECTOR_DB_URL`, `NORMALIZE_VECTORS`, `CHUNK_*`); empty
 `HASHING_SECRET`/`ACCESS_TOKEN_SECRET` satisfy Settings (compose enforces
 `${VAR:?}`, desktop does not). Document the rest; add `min_length=1`.
 
+_Partial progress: healthchecks, loopback-only port publishing, and an
+always-teardown runner now cover service readiness and lifecycle._
+
 ### 27. e2e stack hygiene — `docker-compose.e2e.yml`, `tests_e2e/`
 No healthchecks and 0.0.0.0 port publishes (an unauthenticated llama pair and
 trivial-credential Postgres exposed LAN-wide during runs); conftest connects
