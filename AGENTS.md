@@ -19,21 +19,24 @@ Locally-hosted, LLM-powered web app for small teams and households (bachelor the
 
 ## Layout
 Per domain: `api/routes/<domain>/views.py` (endpoints) → `services/<domain>.py` (logic) → `crud/<domain>.py` (queries) → `schemas/<domain>.py` (DTOs) → `models/<domain>.py` (ORM).
-- `api/pipelines/`: inference, embed, ingest, fs/ (`summarize` planned)
+- `api/pipelines/`: inference, embed, ingest, fs/
+- `api/services/context_window.py`: shared exact-token chat-history selector for chat, retry, and future router
 - `api/services/retrieval.py`: `fetch_file` / `list_project_files` / `search_project` — plain async funcs shared by chat and orchestrator
 - `api/modules/orchestrator/`: plan-and-execute engine (planned, not yet created)
 - Frontend under `web/`: `components/` (auto-imported), `pages/`, `stores/` (Pinia), `repos/` (API clients per domain), `entities/`, `plugins/`, `router/`, `utils/`
 
 ## Response pipeline
 `POST /api/chat/stream` is the single chat entry point; there is no public mode field
-- **FAST (router):** today every message goes directly to chat. M5 adds one constrained chat-model classification (recent history + registry names) inside the same path → plain chat or a registered capability pipeline (`parse → execute → synthesize`). The model never sees raw tools. Streams **NDJSON**.
+- **FAST (router):** today every message goes directly to chat. M5 adds one constrained chat-model classification (the shared token-aware history suffix + registry names) inside the same path → plain chat or a registered capability pipeline (`parse → execute → synthesize`). The model never sees raw tools. Streams **NDJSON**.
 - **PLAN** *(deferred, post-thesis)*: planner → sequential tool steps → synthesizer. Checkpointed at approval/completion. Progress via **SSE**.
 
 Design details: `docs/plans/tool-contract.md`, rationale: ADR-draft 11 (`docs/adr/drafts/11-deterministic-routing.md`).
 
 ## Context management
-- No passive RAG. Chat scope = whole files + compaction on overflow; project scope = tool-driven fetch; per-project index = embedding retrieval (the only RAG level, behind `VectorRepository`; no global index).
-- Injected context goes at a stable position, never mid-history.
+- No passive RAG. Chat scope = selected whole files + a token-aware suffix of complete recent `user + assistant` turns; project scope = tool-driven fetch; per-project index = embedding retrieval (the only RAG level, behind `VectorRepository`; no global index).
+- Full chat history stays in storage/UI. The model-facing window is selected per request; messages are never truncated, turns are never split, and history is never summarized automatically.
+- The mandatory prompt is system + selected files + current request + output reserve. Candidate history boundaries are measured from the real `/apply-template` prompt and `/tokenize` count against `/props`; persisted token counts are advisory only.
+- Injected context goes at a stable position, never mid-history. Normal chat, retry, and the future router use the same selector.
 
 ## Orchestrator
 Plan-and-Execute, not ReAct. A step = one tool call. Engine resolves `$stepN` refs; linear plans; verify failure → at most one capped re-plan. Write tools require approval (human-in-the-loop). Worker steps use isolated context; planner/synthesizer use full context. All roles share the chat model.

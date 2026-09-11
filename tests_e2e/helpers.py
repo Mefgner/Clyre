@@ -54,6 +54,20 @@ def assert_stream_contract(events: list[dict[str, Any]]) -> str:
     thread_id = first["threadId"]
     assert thread_id
 
+    context = events[1]
+    assert context["event"] == "context_window"
+    assert context["chunk"] is None
+    assert context["threadId"] == thread_id
+    for field in (
+        "includedMessages",
+        "omittedMessages",
+        "firstIncludedOrder",
+        "promptTokens",
+        "slotTokens",
+        "reservedOutputTokens",
+    ):
+        assert isinstance(context[field], int)
+
     last_pair = events[-2:]
     assert [event["event"] for event in last_pair] == [
         "assistant_message_insert",
@@ -62,7 +76,7 @@ def assert_stream_contract(events: list[dict[str, Any]]) -> str:
     assert last_pair[0]["threadId"] == thread_id
     assert last_pair[1] == {"chunk": None, "event": "done", "threadId": None}
 
-    for event in events[1:-2]:
+    for event in events[2:-2]:
         assert event["event"] in CHUNK_EVENTS
         assert isinstance(event["chunk"], str)
         assert event["threadId"] is None

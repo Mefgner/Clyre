@@ -79,9 +79,12 @@ The only doorway to ambient capabilities:
 - `emit(stage_event)` — progress events with uniform stage names (`parse` / `execute` /
   `synthesize`), mapped onto NDJSON `pipeline_progress` events by the chat path. One
   emission point; the frontend stepper renders any plugin without plugin-specific UI.
-- `history_slice` — recent compacted turns for `parse` and `synthesize`. Parse needs it so
-  extracted entities are maximally descriptive on follow-ups; synthesize needs it because a
-  plugin's answer must fit the conversation.
+- `history_slice` — the token-aware suffix selected by the shared context-window selector:
+  complete `user + assistant` turns only, never truncated or summarized. The selector keeps
+  system prompt, selected files, current request, and output reserve mandatory, then finds
+  the largest continuous recent suffix using the actual `/apply-template` + `/tokenize`
+  prompt against `/props`. Chat, retry, router, parse and synthesize must not implement
+  separate history-window logic.
 - `file_mutations` — the only filesystem write gateway. It owns path validation, locking,
   durable operation records, atomic replacement, verification, and crash reconciliation;
   handlers never implement this protocol independently.
@@ -225,11 +228,14 @@ Three levels were considered; L1 is chosen.
 ## Router mechanics
 
 ```
-input:  recent messages + user query + [{name, description, produces}] from registry
+input:  shared token-aware history suffix + user query + [{name, description, produces}] from registry
 output: constrained enum: "chat" | "<plugin name>"
 model:  CHAT; runs on every message
 ```
 
+- **Shared selector** — the router consumes the same context-window selection as ordinary
+  chat and retry; it must not estimate tokens, truncate messages, split turns, or summarize
+  history independently.
 - **Always LLM classification** — no slash commands, no syntax, no cheap prefilter: users
   must not learn a new interaction style.
 - **Dynamic registry** — names are read from the live registry, not a hardcoded enum

@@ -10,6 +10,7 @@
 // The orphaned `ThreadHistoryCache` interface in entities is part of this plan —
 // do not delete it while the plan is open.
 import type {
+  ContextWindowInfo,
   ThreadHistory,
   ThreadMessage,
   ThreadMetadata,
@@ -69,6 +70,7 @@ const wait = (delayMs: number) => new Promise(resolve => setTimeout(resolve, del
 export const useThreadStore = defineStore('thread', () => {
   const threadsMeta = ref<ThreadMetadata[]>([])
   const isGenerating = ref(false)
+  const contextWindow = ref<ContextWindowInfo | null>(null)
   // Thread id of the run whose NDJSON stream this client is consuming, or
   // null. The resume-poller must not touch that thread (two writers on
   // currentThread duplicate/roll back visible text), and the stop button
@@ -156,6 +158,7 @@ export const useThreadStore = defineStore('thread', () => {
   const setCurrentThread = async (threadMeta: ThreadMetadata) => {
     const thread = (await threadRepo.getThreadHistory(threadMeta.id)).data
     currentThread.value = thread ?? newThread()
+    contextWindow.value = null
 
     if (thread?.isGenerating) {
       startGenerationPolling()
@@ -169,6 +172,7 @@ export const useThreadStore = defineStore('thread', () => {
 
   const clearCurrent = () => {
     currentThread.value = newThread()
+    contextWindow.value = null
   }
 
   const deleteCurrentThread = async () => {
@@ -180,18 +184,22 @@ export const useThreadStore = defineStore('thread', () => {
   }
 
   const pushUserMessage = (message: string) => {
+    const previousOrder = currentThread.value.messages.at(-1)?.order
     const newMessage: ThreadMessage = {
       role: 'user',
       content: message,
+      order: previousOrder === undefined ? 0 : previousOrder + 1,
     }
     currentThread.value.messages.push(newMessage)
   }
 
   const pushAssistantMessage = (message: string, thinking?: string) => {
+    const previousOrder = currentThread.value.messages.at(-1)?.order
     const newMessage: ThreadMessage = {
       role: 'assistant',
       content: message,
       thinking: thinking ?? null,
+      order: previousOrder === undefined ? 0 : previousOrder + 1,
     }
     currentThread.value.messages.push(newMessage)
   }
@@ -295,6 +303,29 @@ export const useThreadStore = defineStore('thread', () => {
           accepted = true
           break
         }
+
+        case 'context_window': {
+          if (
+            payload.includedMessages !== undefined
+            && payload.omittedMessages !== undefined
+            && payload.firstIncludedOrder !== undefined
+            && payload.promptTokens !== undefined
+            && payload.slotTokens !== undefined
+            && payload.reservedOutputTokens !== undefined
+            && isActiveStream()
+          ) {
+            contextWindow.value = {
+              includedMessages: payload.includedMessages,
+              omittedMessages: payload.omittedMessages,
+              firstIncludedOrder: payload.firstIncludedOrder,
+              promptTokens: payload.promptTokens,
+              slotTokens: payload.slotTokens,
+              reservedOutputTokens: payload.reservedOutputTokens,
+            }
+          }
+          break
+        }
+
         case 'assistant_message_insert': {
           break
         }
@@ -484,6 +515,7 @@ export const useThreadStore = defineStore('thread', () => {
   return {
     threadsMeta,
     isGenerating,
+    contextWindow,
     activeStreamThreadId,
     getThreadsMeta,
     clearThreadsMeta,

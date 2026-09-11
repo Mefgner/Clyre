@@ -27,13 +27,13 @@ chat_router = APIRouter(tags=["chatting"])
 def _limit_detail(has_files: bool) -> dict[str, str]:
     if has_files:
         message = (
-            "Attached files exceed the current model context limit. "
-            "Remove a file or attach a smaller version."
+            "The required prompt and attached files exceed the current model context limit. "
+            "Remove a file, attach a smaller version, or shorten the request."
         )
     else:
         message = (
-            "Chat history exceeds the current model context limit. "
-            "Start a new thread to continue."
+            "The required prompt and current request exceed the model context limit. "
+            "Shorten the request or use a model with a larger context window."
         )
     return {"code": "context_limit_exceeded", "message": message}
 

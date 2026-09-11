@@ -25,13 +25,9 @@ from crud.message import (
 from db import get_session_manager
 from models import GenerationRunRow, Message, Thread
 from pipelines.inference import get_inference_pipeline
-from schemas.chatting import StreamingBlock
-from services.chat_context import (
-    AttachedFile,
-    AttachmentLimitExceeded,
-    build_chat_context,
-    prepare_attached_files,
-)
+from schemas.chatting import ContextWindowBlock, StreamingBlock
+from services.chat_context import AttachedFile, AttachmentLimitExceeded, prepare_attached_files
+from services.context_window import ContextWindow, select_context_window
 from services.generation import (
     PARTIAL_FLUSH_SECONDS,
     GenerationConflict,
@@ -69,6 +65,7 @@ class _PreparedStart:
     existing_ids: list[str]
     persisted: list[Message]
     prompt_tokens: int
+    context_window: ContextWindow
 
 
 @dataclass(slots=True)
@@ -79,6 +76,7 @@ class _PreparedRetry:
     union_ids: list[str]
     victim_order: int
     prompt_tokens: int
+    context_window: ContextWindow
 
 
 def _dedupe_ids(file_ids: Iterable[str] | None) -> list[str]:
@@ -265,11 +263,13 @@ class ChattingService:
             thread_id=thread_id or "",
             order=(persisted[-1].order + 1) if persisted else 0,
         )
-        prompt = build_chat_context(
-            [*persisted, transient], attached, base_prompt=DEFAULT_SYSTEM_PROMPT
-        )
-        prompt_tokens = await get_inference_pipeline().check_token_budget(
-            prompt, enable_thinking
+        context_window = await select_context_window(
+            persisted,
+            transient,
+            attached,
+            base_prompt=DEFAULT_SYSTEM_PROMPT,
+            inference=get_inference_pipeline(),
+            enable_thinking=enable_thinking,
         )
 
         title: str | None = None
@@ -279,12 +279,13 @@ class ChattingService:
             is_new=thread is None,
             thread=thread,
             title=title,
-            prompt=prompt,
+            prompt=context_window.prompt,
             attached=attached,
             union_ids=union_ids,
             existing_ids=existing_ids,
             persisted=persisted,
-            prompt_tokens=prompt_tokens,
+            prompt_tokens=context_window.prompt_tokens,
+            context_window=context_window,
         )
 
     async def _prepare_retry(
@@ -306,8 +307,13 @@ class ChattingService:
             raise GenerationConflict("Nothing to retry")
 
         victim_order = messages[-1].order
-        # The victim is the trailing assistant; everything else is context.
+        # The victim is the trailing assistant; the preceding user message is
+        # the current request and earlier messages are selectable history.
         kept = messages[:-1]
+        if not kept or kept[-1].role != "user":
+            raise GenerationConflict("Nothing to retry")
+        current = kept[-1]
+        history = kept[:-1]
 
         existing_rows = await list_thread_files(session, thread_id, user_id)
         union_ids = [row.id for row in existing_rows]
@@ -315,17 +321,22 @@ class ChattingService:
         if len(union_ids) > limit:  # pragma: no cover - defensive; links were capped
             raise AttachmentLimitExceeded(len(union_ids), limit)
         attached = await prepare_attached_files(session, user_id, union_ids)
-        prompt = build_chat_context(kept, attached, base_prompt=DEFAULT_SYSTEM_PROMPT)
-        prompt_tokens = await get_inference_pipeline().check_token_budget(
-            prompt, enable_thinking
+        context_window = await select_context_window(
+            history,
+            current,
+            attached,
+            base_prompt=DEFAULT_SYSTEM_PROMPT,
+            inference=get_inference_pipeline(),
+            enable_thinking=enable_thinking,
         )
         return _PreparedRetry(
             thread=thread,
-            prompt=prompt,
+            prompt=context_window.prompt,
             attached=attached,
             union_ids=union_ids,
             victim_order=victim_order,
-            prompt_tokens=prompt_tokens,
+            prompt_tokens=context_window.prompt_tokens,
+            context_window=context_window,
         )
 
     async def start_generation(
@@ -415,6 +426,7 @@ class ChattingService:
                 user_id,
                 enable_thinking,
                 prepared.prompt,
+                prepared.context_window,
                 journal_row.id,
                 reserved.id,
             )
@@ -473,6 +485,7 @@ class ChattingService:
                 user_id,
                 enable_thinking,
                 prepared.prompt,
+                prepared.context_window,
                 journal_row.id,
                 reserved.id,
             )
@@ -708,6 +721,7 @@ class ChattingService:
         user_id: str,
         enable_thinking: bool | None,
         history: list[dict[str, str]],
+        context_window: ContextWindow,
         journal_id: str,
         reserved_id: str,
     ) -> GenerationRun:
@@ -794,6 +808,19 @@ class ChattingService:
                     ).model_dump_json(by_alias=True)
                     + "\n"
                 )
+                if context_window.measured_exactly:
+                    await run.publish(
+                        ContextWindowBlock(
+                            thread_id=thread_id,
+                            included_messages=context_window.included_messages,
+                            omitted_messages=context_window.omitted_messages,
+                            first_included_order=context_window.first_included_order,
+                            prompt_tokens=context_window.prompt_tokens,
+                            slot_tokens=context_window.slot_tokens,
+                            reserved_output_tokens=context_window.reserved_output_tokens,
+                        ).model_dump_json(by_alias=True)
+                        + "\n"
+                    )
 
                 async for kind, text in llama.chat_completion_stream(
                     history, enable_thinking=enable_thinking

@@ -24,6 +24,7 @@ class ResponseMessage(BaseModel):
     inline_value: Annotated[str | None, Field(serialization_alias="content")] = None
     thinking_value: Annotated[str | None, Field(serialization_alias="thinking")] = None
     role: str
+    order: int
 
 
 class GetThreadResponse(ThreadMetadata):

@@ -15,6 +15,11 @@
     && (threadStore.activeStreamThreadId === threadStore.currentThread.id
       || threadStore.currentThread.isGenerating === true))
 
+  const contextBoundaryOrder = computed(() => {
+    const window = threadStore.contextWindow
+    return window && window.omittedMessages > 0 ? window.firstIncludedOrder : null
+  })
+
   watch([() => threadStore.threadsMeta, () => props.chatId], async () => {
     if (props.chatId === 'new') return
     const threadMeta = threadStore.threadsMeta.find(thread => thread.id === props.chatId)
@@ -39,7 +44,18 @@
 
 <template>
   <div class="d-flex flex-column justify-start w-100">
-    <div v-for="(chat, index) in threadStore.currentThread.messages" :key="`chat-message-${index}`">
+    <div v-for="(chat, index) in threadStore.currentThread.messages" :key="`chat-message-${chat.order ?? index}`">
+      <div
+        v-if="contextBoundaryOrder !== null && chat.order === contextBoundaryOrder"
+        class="context-window-boundary d-flex align-center ga-3 my-4"
+      >
+        <v-divider />
+        <div class="text-medium-emphasis text-caption text-center flex-shrink-0">
+          <div>Модель видит сообщения начиная отсюда</div>
+          <div class="text-disabled">Для новой темы лучше открыть новый чат</div>
+        </div>
+        <v-divider />
+      </div>
       <user-prompt-bubble v-if="chat.role === 'user'" :message="chat.content ?? ''" />
       <chat-answer
         v-else-if="chat.role === 'assistant'"
@@ -51,3 +67,9 @@
     <div ref="chatHistoryFooter" />
   </div>
 </template>
+
+<style scoped>
+.context-window-boundary {
+  opacity: 0.72;
+}
+</style>

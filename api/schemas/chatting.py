@@ -32,3 +32,15 @@ class StreamingBlock(BaseModel):
         "done",
     ]
     thread_id: Annotated[str | None, Field(serialization_alias="threadId")] = None
+
+
+class ContextWindowBlock(BaseModel):
+    chunk: None = None
+    event: Literal["context_window"] = "context_window"
+    thread_id: Annotated[str, Field(serialization_alias="threadId")]
+    included_messages: Annotated[int, Field(serialization_alias="includedMessages")]
+    omitted_messages: Annotated[int, Field(serialization_alias="omittedMessages")]
+    first_included_order: Annotated[int, Field(serialization_alias="firstIncludedOrder")]
+    prompt_tokens: Annotated[int, Field(serialization_alias="promptTokens")]
+    slot_tokens: Annotated[int, Field(serialization_alias="slotTokens")]
+    reserved_output_tokens: Annotated[int, Field(serialization_alias="reservedOutputTokens")]

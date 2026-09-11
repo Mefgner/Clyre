@@ -23,7 +23,7 @@ Checked in order; each maps to the phase that makes it possible.
     non-thinking generation used the uploaded file in the first answer and
     continued the conversation with the file remaining in thread context.
     Automated backend, frontend, and regular live E2E suites pass.
-- [ ] **M4 — Compaction.** A thread overflowing the context window is summarized (oldest → summary, recent verbatim) and still answers; the user is notified. *(Phase 2)*
+- [x] **M4 — Token-aware context window.** Full history remains in storage/UI while each generation uses the largest exact-token suffix of complete recent turns that fits after system prompt, selected files, current request, and output reserve; the UI shows the visibility boundary. *(Phase 2)*
 - [ ] **M5 — Routing.** The fast-mode router classifies a query into plain chat or a registered read-only capability; the capability pipeline runs end to end and the answer uses its result. *(Phase 2)*
 - [ ] **M6 — Projects.** A project groups threads and explicitly linked files can be selected from a listing. *(Phase 3)*
 - [ ] **M7 — Project RAG.** A file is added to a project, indexed in the background, semantic search returns relevant chunks, and the answer uses them. *(Phase 4)*
@@ -138,18 +138,22 @@ Plain async functions, callable by both the chat path and the orchestrator.
   `DELETE /api/files/{file_id}` deletes metadata first and the blob after a
   successful commit (cleanup failures logged, never strand a live row)
 
-### 2.4 Summarization + chat compaction
-- [ ] `api/pipelines/summarize.py`: `summarize(text, target_tokens) -> str`; token counts via `/tokenize`
-- [ ] `ALLOW_FILE_SUMMARIZATION` env (default `true`)
-- [ ] In `ChattingService`: track thread token count; on overflow summarize oldest messages, keep recent verbatim
-- [ ] Emit `context_compacted` so the frontend notifies the user
+### 2.4 Token-aware context window
+- [x] Keep complete chat history in the DB/UI; generation context is selected per request and never rewrites history
+- [x] Mandatory minimum: system prompt + selected files + current user request + `CHAT_MAX_OUTPUT_TOKENS`; if it does not fit, return 422 `context_limit_exceeded`
+- [x] Historical context consists only of complete `user + assistant` turns; choose the largest continuous suffix of recent turns, never truncate a message or split a turn
+- [x] Evaluate candidate boundaries from the actual target-model prompt via `/apply-template` + `/tokenize` against `/props`; saved token counts are never an admission source of truth
+- [x] One shared selector (`services/context_window.py`) is used by normal starts and retry and is the required history source for the future router
+- [x] Emit replayable NDJSON `context_window` metadata: `includedMessages`, `omittedMessages`, `firstIncludedOrder`, `promptTokens`, `slotTokens`, `reservedOutputTokens`
+- [x] Frontend keeps every message visible and shows a subtle “Модель видит сообщения начиная отсюда” boundary when older turns were omitted, with a recommendation to start a new chat for a new topic
+- [x] No automatic history summarization or LLM compaction path
 
 ### 2.5 L0 — fast path with attached files
-- [x] In `ChattingService.stream_response`: build context from history (compacted) + **thread**-attached files, injected at a **stable position** (never mid-history) — M3: pure `build_chat_context` (one system message with a JSON `attached_files` block marked untrusted, history, current exactly once), Python-side `(name, id)` ordering, strict `extract_text` for every attached byte, never `head_value`
+- [x] In `ChattingService.stream_response`: build context from the token-aware history suffix + **thread**-attached files, injected at a **stable position** (never mid-history) — M3: pure `build_chat_context` (one system message with a JSON `attached_files` block marked untrusted, history, current exactly once), Python-side `(name, id)` ordering, strict `extract_text` for every attached byte, never `head_value`
 - [ ] Project-attached files in context (waits for the M6 project UI; project membership alone adds nothing today)
 - [x] No automatic RAG injection; files enter context only when attached or tool-fetched
-- [x] Strict token budget (M3): full prompt rendered through the server chat template (`/apply-template` with the same thinking params as generation), counted via `/tokenize`, checked against the real slot size (`/props`); admit only `prompt_tokens + CHAT_MAX_OUTPUT_TOKENS (1024) <= slot`, same reserve sent as `max_tokens`; overflow → 422 `context_limit_exceeded`, unavailable preflight → 503 (never approximate)
-- [x] Atomic generation start (M3): `fileIds` in the chat request; prepare (ownership → union ≤ 16 → sequential read → context → budget → title) before any write; one commit for thread/links/user message/journal/reserve; prepare failure creates nothing and calls neither completion nor title; retry prepares before deleting the previous answer; legacy `/response` wraps the same start path
+- [x] Strict token budget (M3/M4): every candidate full prompt is rendered through the server chat template (`/apply-template` with the same thinking params as generation), counted via `/tokenize`, checked against the real slot size (`/props`); admit only `prompt_tokens + CHAT_MAX_OUTPUT_TOKENS (1024) <= slot`, same reserve sent as `max_tokens`; mandatory-minimum overflow → 422 `context_limit_exceeded`, unavailable preflight → 503 (never approximate)
+- [x] Atomic generation start (M3): `fileIds` in the chat request; prepare (ownership → union ≤ 16 → sequential read → context selection → title) before any write; one commit for thread/links/user message/journal/reserve; prepare failure creates nothing and calls neither completion nor title; retry selects its context before deleting the previous answer; legacy `/response` wraps the same start path
 
 ### Post-M3 file relevance window (agreed direction, not implemented)
 - Attaching a file, or explicitly invoking it, opens a window of 5 user requests.
@@ -164,7 +168,7 @@ Plain async functions, callable by both the chat path and the orchestrator.
 Full contract: **`docs/plans/tool-contract.md`** — categories, manifest, skeleton, ranking,
 durability, router mechanics. The model never sees raw tools; selection is deterministic.
 - [ ] `@plugin` registry (`api/modules/engine/plugins/`) + dynamic name list for the router
-- [ ] Router: one constrained chat-model classification per message (recent history + registry names) → `chat` | `<plugin>`; multi-intent → plugin priority + honest disclaimer
+- [ ] Router: one constrained chat-model classification per message (the shared M4 context suffix + registry names) → `chat` | `<plugin>`; multi-intent → plugin priority + honest disclaimer
 - [ ] Thin tools (`fetch_file`, `list_project_files`, `search_project`) stay code-only building blocks for handlers
 - [ ] First thick plugin proves the skeleton (file-oriented capability first; `web_search` follows once its data-source backend is chosen)
 - [ ] Runtime-owned file mutation gateway enforces approved `lock → durable intent → atomic apply → commit → unlock`, hash-based conflict detection/recovery, and forbids direct writes from `W|RW` handlers
@@ -368,13 +372,13 @@ Runtime-agnostic monolith, two delivery shapes over the same code (see ADR-3): d
 - [ ] File management UI (upload, list, attach, index automatically in project)
 - [ ] Project sidebar
 - [ ] Agent progress stepper with approval dialog
-- [ ] Settings: inference/embedding URLs, model names, `ALLOW_FILE_SUMMARIZATION`
+- [ ] Settings: inference/embedding URLs and model names
 - [ ] Thinking toggle in the UI (backend support shipped with M2: `enableThinking` request flag, `new_thinking_chunk` NDJSON event, persisted `Message.thinking_value`; thinking is display-only — never re-sent in history per the Qwen3.5 model card)
 - [ ] PWA: manifest + service worker + icons (`vite-plugin-pwa`) — installable, standalone window, offline shell; works on `localhost` (desktop); on LAN it degrades to a browser tab without a self-signed cert
 
 ### 6.5 Observability
 - [ ] Structured request logging (request id, user id, duration)
-- [ ] `/api/metrics`: token usage, active threads, model status, compaction count
+- [ ] `/api/metrics`: token usage, active threads, model status, context-window omission count
 
 ### 6.6 Maintenance and security hardening
 - [ ] Cleanup of expired/revoked refresh-token rows
